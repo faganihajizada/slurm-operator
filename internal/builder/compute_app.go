@@ -60,6 +60,7 @@ func (b *Builder) BuildComputePodTemplate(nodeset *slinkyv1alpha1.NodeSet, contr
 			},
 			NodeSelector:      template.NodeSelector,
 			PriorityClassName: template.PriorityClassName,
+			ResourceClaims:    template.ResourceClaims,
 			Tolerations:       template.Tolerations,
 			Volumes:           utils.MergeList(nodesetVolumes(controller), template.Volumes),
 		},

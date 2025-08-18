@@ -82,6 +82,10 @@ spec:
       {{- toYaml . | nindent 6 }}
     {{- end }}{{- /* with $nodeset.tolerations */}}
     priorityClassName: {{ $.Values.priorityClassName }}
+    {{- with $nodeset.resourceClaims }}
+    resourceClaims:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}{{- /* with $nodeset.resourceClaims */}}
     {{- with $nodeset.volumes }}
     volumes:
       {{- toYaml . | nindent 6 }}

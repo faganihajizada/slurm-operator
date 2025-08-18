@@ -57,3 +57,7 @@ spec:
       {{- toYaml . | nindent 6 }}
     {{- end }}{{- /* with .Values.restapi.tolerations */}}
     priorityClassName: {{ .Values.priorityClassName }}
+    {{- with .Values.restapi.resourceClaims }}
+    resourceClaims:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}{{- /* with .Values.restapi.resourceClaims */}}

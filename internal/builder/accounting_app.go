@@ -101,6 +101,7 @@ func (b *Builder) accountingPodTemplate(accounting *slinkyv1alpha1.Accounting) (
 			},
 			NodeSelector:      template.NodeSelector,
 			PriorityClassName: template.PriorityClassName,
+			ResourceClaims:    template.ResourceClaims,
 			Tolerations:       template.Tolerations,
 			Volumes:           utils.MergeList(accountingVolumes(accounting), template.Volumes),
 		},

@@ -143,6 +143,7 @@ func (b *Builder) loginPodTemplate(loginset *slinkyv1alpha1.LoginSet) (corev1.Po
 			ImagePullSecrets:  template.ImagePullSecrets,
 			NodeSelector:      template.NodeSelector,
 			PriorityClassName: template.PriorityClassName,
+			ResourceClaims:    template.ResourceClaims,
 			Tolerations:       template.Tolerations,
 			Volumes:           utils.MergeList(loginVolumes(loginset, controller), template.Volumes),
 		},

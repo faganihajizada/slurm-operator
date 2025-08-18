@@ -111,6 +111,21 @@ type PodTemplate struct {
 	// +listType=map
 	// +listMapKey=name
 	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge,retainKeys" patchMergeKey:"name"`
+
+	// ResourceClaims defines which ResourceClaims must be allocated
+	// and reserved before the Pod is allowed to start. The resources
+	// will be made available to those containers which consume them
+	// by name.
+	//
+	// This is an alpha field and requires enabling the
+	// DynamicResourceAllocation feature gate.
+	//
+	// This field is immutable.
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	ResourceClaims []corev1.PodResourceClaim `json:"resourceClaims,omitempty"`
 }
 
 // Metadata defines the metadata to added to resources.

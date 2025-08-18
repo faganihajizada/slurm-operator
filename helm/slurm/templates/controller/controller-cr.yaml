@@ -95,6 +95,10 @@ spec:
       {{- toYaml . | nindent 6 }}
     {{- end }}{{- /* with .Values.controller.tolerations */}}
     priorityClassName: {{ .Values.priorityClassName }}
+    {{- with .Values.controller.resourceClaims }}
+    resourceClaims:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}{{- /* with .Values.controller.resourceClaims */}}
   {{- with .Values.controller.persistence }}
   persistence:
     {{- toYaml . | nindent 4 }}

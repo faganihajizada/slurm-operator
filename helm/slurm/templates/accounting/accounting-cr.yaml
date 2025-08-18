@@ -69,6 +69,10 @@ spec:
       {{- toYaml . | nindent 6 }}
     {{- end }}{{- /* with .Values.accounting.tolerations */}}
     priorityClassName: {{ .Values.priorityClassName }}
+    {{- with .Values.accounting.resourceClaims }}
+    resourceClaims:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}{{- /* with .Values.accounting.resourceClaims */}}
   {{- with .Values.accounting.storageConfig }}
   storageConfig:
     {{- toYaml . | nindent 4 }}
