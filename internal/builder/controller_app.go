@@ -9,6 +9,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -106,6 +107,8 @@ func (b *Builder) BuildController(controller *slinkyv1alpha1.Controller) (*appsv
 func (b *Builder) controllerPodTemplate(controller *slinkyv1alpha1.Controller) (corev1.PodTemplateSpec, error) {
 	key := controller.Key()
 
+	hasAccounting := !equality.Semantic.DeepEqual(controller.Spec.AccountingRef, slinkyv1alpha1.ObjectReference{})
+
 	objectMeta := metadata.NewBuilder(key).
 		WithMetadata(controller.Spec.Template.PodMetadata).
 		WithLabels(labels.NewBuilder().WithControllerLabels(controller).Build()).
@@ -122,7 +125,7 @@ func (b *Builder) controllerPodTemplate(controller *slinkyv1alpha1.Controller) (
 			AutomountServiceAccountToken: ptr.To(false),
 			Affinity:                     template.Affinity,
 			Containers: []corev1.Container{
-				slurmctldContainer(template.Container),
+				slurmctldContainer(template.Container, hasAccounting),
 				reconfigureContainer(template.Reconfigure),
 			},
 			Hostname: template.Hostname,
@@ -205,7 +208,7 @@ func controllerVolumes(controller *slinkyv1alpha1.Controller) []corev1.Volume {
 	return out
 }
 
-func slurmctldContainer(container slinkyv1alpha1.Container) corev1.Container {
+func slurmctldContainer(container slinkyv1alpha1.Container, hasAccounting bool) corev1.Container {
 	out := corev1.Container{
 		Name:            labels.ControllerApp,
 		Args:            container.Args,
@@ -219,15 +222,6 @@ func slurmctldContainer(container slinkyv1alpha1.Container) corev1.Container {
 			},
 		},
 		Resources: container.Resources,
-		StartupProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(SlurmctldPort),
-				},
-			},
-			FailureThreshold: 6,
-			PeriodSeconds:    10,
-		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{
@@ -250,6 +244,37 @@ func slurmctldContainer(container slinkyv1alpha1.Container) corev1.Container {
 		},
 	}
 	out.VolumeMounts = append(out.VolumeMounts, container.VolumeMounts...)
+
+	if hasAccounting {
+		out.StartupProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				Exec: &corev1.ExecAction{
+					Command: []string{
+						"sacctmgr",
+						"-P",
+						"-n",
+						"show",
+						"cluster",
+					},
+				},
+			},
+			InitialDelaySeconds: 30,
+			PeriodSeconds:       15,
+			TimeoutSeconds:      10,
+			FailureThreshold:    60,
+		}
+	} else {
+		out.StartupProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{
+					Port: intstr.FromInt(SlurmctldPort),
+				},
+			},
+			FailureThreshold: 6,
+			PeriodSeconds:    10,
+		}
+	}
+
 	return out
 }
 
