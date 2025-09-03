@@ -12,8 +12,7 @@ namespaceOverride: null
 
 # -- Set the secrets for image pull.
 # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets:
-  []
+imagePullSecrets: []
   # - name: regcred
 
 # -- Set the image pull policy.
@@ -27,16 +26,14 @@ priorityClassName: null
 # -- (secretKeyRef) Slurm shared authentication key.
 # If empty, one will be generated and used.
 # Ref: https://slurm.schedmd.com/authentication.html#slurm
-slurmKeyRef:
-  {}
+slurmKeyRef: {}
   # name: slurm-auth-slurm
   # key: slurm.key
 
 # -- (secretKeyRef) Slurm cluster JWT HS256 authentication key.
 # If empty, one will be generated and used.
 # Ref: https://slurm.schedmd.com/authentication.html#jwt
-jwtHs256KeyRef:
-  {}
+jwtHs256KeyRef: {}
   # name: slurm-auth-jwths256
   # key: jwt_hs256.key
 
@@ -47,8 +44,7 @@ clusterName: null
 
 # -- (map[string]string) Extra Slurm config files to be mounted.
 # Ref: https://slurm.schedmd.com/man_index.html#configuration_files
-configFiles:
-  {}
+configFiles: {}
   # Ref: https://slurm.schedmd.com/cgroup.conf.html
   # cgroup.conf: |
   #   CgroupPlugin=autodetect
@@ -80,8 +76,7 @@ configFiles:
 # Ref: https://slurm.schedmd.com/slurm.conf.html#OPT_Prolog
 # Ref: https://slurm.schedmd.com/prolog_epilog.html
 # Ref: https://en.wikipedia.org/wiki/Shebang_(Unix)
-prologScripts:
-  {}
+prologScripts: {}
   # 00-empty.sh: |
   #   #!/usr/bin/env bash
   #   set -euo pipefail
@@ -93,8 +88,7 @@ prologScripts:
 # Ref: https://slurm.schedmd.com/slurm.conf.html#OPT_Epilog
 # Ref: https://slurm.schedmd.com/prolog_epilog.html
 # Ref: https://en.wikipedia.org/wiki/Shebang_(Unix)
-epilogScripts:
-  {}
+epilogScripts: {}
   # 00-empty.sh: |
   #   #!/usr/bin/env bash
   #   set -euo pipefail
@@ -109,8 +103,7 @@ authcred:
     tag: 25.05-ubuntu24.04
   # -- The container resource limits and requests.
   # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-  resources:
-    {}
+  resources: {}
     # limits:
     #   cpu: 1
     #   memory: 1Gi
@@ -124,8 +117,7 @@ controller:
     tag: 25.05-ubuntu24.04
   # -- Arguments passed to the image.
   # Ref: https://slurm.schedmd.com/slurmctld.html#SECTION_OPTIONS
-  args:
-    []
+  args: []
     # - -vvv
   # -- Extra Slurm configuration lines appended to `slurm.conf`.
   # Ref: https://slurm.schedmd.com/slurm.conf.html
@@ -133,8 +125,7 @@ controller:
   # -- (map[string]string \| map[string][]string) Extra Slurm configuration lines appended to `slurm.conf`.
   # If `extraConf` is not empty, it takes precedence.
   # Ref: https://slurm.schedmd.com/slurmdbd.conf.html
-  extraConfMap:
-    {}
+  extraConfMap: {}
     # DebugFlags: []
     # MinJobAge: 2
     # SchedulerParameters: []
@@ -170,11 +161,10 @@ controller:
       tag: 25.05-ubuntu24.04
     # -- The container resource limits and requests.
     # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-    resources:
-      {}
+    resources: {}
       # limits:
-      # cpu: 500m
-      # memory: 100Mi
+        # cpu: 500m
+        # memory: 100Mi
   # LogFile sidecar configurations.
   logfile:
     # -- The image to use, `${repository}:${tag}`.
@@ -184,15 +174,13 @@ controller:
       tag: latest
     # -- The container resource limits and requests.
     # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-    resources:
-      {}
+    resources: {}
       # limits:
       #   cpu: 500m
       #   memory: 100Mi
   # -- The container resource limits and requests.
   # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-  resources:
-    {}
+  resources: {}
     # limits:
     #   cpu: 1
     #   memory: 1Gi
@@ -205,15 +193,13 @@ controller:
   affinity: {}
   # -- Tolerations for pod assignment.
   # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-  tolerations:
-    []
+  tolerations: []
     # - key: key1
     #   operator: Exists
     #   effect: NoSchedule
   # -- The service configuration.
   # Ref: https://kubernetes.io/docs/concepts/services-networking/service/
-  service:
-    {}
+  service: {}
     # type: LoadBalancer
     # port: 6817
     # loadBalancerIP: ""
@@ -229,21 +215,18 @@ restapi:
     tag: 25.05-ubuntu24.04
   # -- Environment passed to the image.
   # Ref: https://slurm.schedmd.com/slurmrestd.html#SECTION_ENVIRONMENT-VARIABLES
-  env:
-    []
+  env: []
     # - name: SLURMRESTD_YAML
     #   value: pretty
   # -- Arguments passed to the image.
   # Ref: https://slurm.schedmd.com/slurmrestd.html#SECTION_OPTIONS
-  args:
-    []
+  args: []
     # - -vvv
   # -- Number of replicas to deploy.
   replicas: 1
   # -- The container resource limits and requests.
   # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-  resources:
-    {}
+  resources: {}
     # limits:
     #   cpu: 1
     #   memory: 1Gi
@@ -256,15 +239,13 @@ restapi:
   affinity: {}
   # -- Tolerations for pod assignment.
   # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-  tolerations:
-    []
+  tolerations: []
     # - key: key1
     #   operator: Exists
     #   effect: NoSchedule
   # -- The service configuration.
   # Ref: https://kubernetes.io/docs/concepts/services-networking/service/
-  service:
-    {}
+  service: {}
     # type: ClusterIP
     # port: 6820
     # loadBalancerIP: ""
@@ -295,8 +276,7 @@ accounting:
     tag: 25.05-ubuntu24.04
   # -- Arguments passed to the image.
   # Ref: https://slurm.schedmd.com/slurmdbd.html#SECTION_OPTIONS
-  args:
-    []
+  args: []
     # - -vvv
   # -- Extra Slurm configuration lines appended to `slurmdbd.conf`.
   # Ref: https://slurm.schedmd.com/slurm.conf.html
@@ -304,8 +284,7 @@ accounting:
   # -- (map[string]string \| map[string][]string) Extra Slurm configuration lines appended to `slurmdbd.conf`.
   # If `extraConf` is not empty, it takes precedence.
   # Ref: https://slurm.schedmd.com/slurmdbd.conf.html
-  extraConfMap:
-    {}
+  extraConfMap: {}
     # CommitDelay: 1
     # DebugLevel: debug2
     # DebugFlags: []
@@ -344,15 +323,13 @@ accounting:
       tag: 25.05-ubuntu24.04
     # -- The container resource limits and requests.
     # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-    resources:
-      {}
+    resources: {}
       # limits:
       #   cpu: 500m
       #   memory: 100Mi
   # -- The container resource limits and requests.
   # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-  resources:
-    {}
+  resources: {}
     # limits:
     #   cpu: 1
     #   memory: 1Gi
@@ -365,15 +342,13 @@ accounting:
   affinity: {}
   # -- Tolerations for pod assignment.
   # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-  tolerations:
-    []
+  tolerations: []
     # - key: key1
     #   operator: Exists
     #   effect: NoSchedule
   # -- The service configuration.
   # Ref: https://kubernetes.io/docs/concepts/services-networking/service/
-  service:
-    {}
+  service: {}
     # type: LoadBalancer
     # loadBalancerIP: ""
     # externalIPs: []
@@ -393,8 +368,7 @@ loginsets:
       repository: ghcr.io/slinkyproject/login
       tag: 25.05-ubuntu24.04
     # -- Environment passed to the image.
-    env:
-      {}
+    env: {}
       # - name: SACKD_OPTIONS
       #   value: -vvv
     # -- SSH public keys to write into `/root/.ssh/authorized_keys`.
@@ -432,8 +406,7 @@ loginsets:
       #     - SYS_CHROOT
     # -- The container resource limits and requests.
     # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-    resources:
-      {}
+    resources: {}
       # limits:
       #   cpu: 1
       #   memory: 1Gi
@@ -446,8 +419,7 @@ loginsets:
     affinity: {}
     # -- Tolerations for pod assignment.
     # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-    tolerations:
-      []
+    tolerations: []
       # - key: key1
       #   operator: Exists
       #   effect: NoSchedule
@@ -461,16 +433,14 @@ loginsets:
       # externalName: ""
     # -- List of volumes to use.
     # Ref: https://kubernetes.io/docs/concepts/storage/volumes/
-    volumes:
-      []
+    volumes: []
       # - name: nfs-home
       #   nfs:
       #     server: nfs-server.example.com
       #     path: /exports/home
     # -- List of volume mounts to use.
     # Ref: https://kubernetes.io/docs/concepts/storage/volumes/
-    volumeMounts:
-      []
+    volumeMounts: []
       # - name: nfs-home
       #   mountPath: /home
 
@@ -489,8 +459,7 @@ nodesets:
       tag: 25.05-ubuntu24.04
     # -- Arguments passed to the image.
     # Ref: https://slurm.schedmd.com/slurmd.html#SECTION_OPTIONS
-    args:
-      []
+    args: []
       # - -vvv
     # -- Extra configuration added to the `--conf` argument.
     # Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_NODE-CONFIGURATION
@@ -498,8 +467,7 @@ nodesets:
     # -- (map[string]string \| map[string][]string) Extra configuration added to the `--conf` argument.
     # If `extraConf` is not empty, it takes precedence.
     # Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_NODE-CONFIGURATION
-    extraConfMap:
-      {}
+    extraConfMap: {}
       # Features: []
       # Gres: []
       # Weight: 1
@@ -513,8 +481,7 @@ nodesets:
       # -- (map[string]string \| map[string][]string) The Slurm partition configuration options added to the partition line.
       # If `config` is not empty, it takes precedence.
       # Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION
-      configMap:
-        {}
+      configMap: {}
         # State: UP
         # MaxTime: UNLIMITED
     # LogFile sidecar configurations.
@@ -526,15 +493,13 @@ nodesets:
         tag: latest
       # -- The container resource limits and requests.
       # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-      resources:
-        {}
+      resources: {}
         # limits:
         #   cpu: 500m
         #   memory: 100Mi
     # -- The container resource limits and requests.
     # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
-    resources:
-      {}
+    resources: {}
       # limits:
       #   cpu: 1
       #   memory: 1Gi
@@ -549,23 +514,20 @@ nodesets:
     affinity: {}
     # -- Tolerations for pod assignment.
     # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-    tolerations:
-      []
+    tolerations: []
       # - key: nvidia.com/gpu
       #   value: Exists
       #   effect: NoSchedule
     # -- List of volumes to use.
     # Ref: https://kubernetes.io/docs/concepts/storage/volumes/
-    volumes:
-      []
+    volumes: []
       # - name: nfs-home
       #   nfs:
       #     server: nfs-server.example.com
       #     path: /exports/home
     # -- List of volume mounts to use.
     # Ref: https://kubernetes.io/docs/concepts/storage/volumes/
-    volumeMounts:
-      []
+    volumeMounts: []
       # - name: nfs-home
       #   mountPath: /home
 
