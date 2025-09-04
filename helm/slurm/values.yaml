@@ -563,7 +563,5 @@ vendor:
       enabled: false
       # -- Directory path where GPU-to-job mapping files will be stored
       jobMappingDir: "/var/lib/dcgm-exporter/job-mapping"
-      # -- Auto-detect NVIDIA GPU nodesets based on nvidia.com/gpu resource limits
-      autoDetect: true
       # -- Script execution priority (lower numbers run first)
       scriptPriority: "90"

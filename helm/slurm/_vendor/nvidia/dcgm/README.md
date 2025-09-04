@@ -12,7 +12,6 @@ vendor:
     dcgm:
       enabled: true
       jobMappingDir: "/var/lib/dcgm-exporter/job-mapping"
-      autoDetect: true
       scriptPriority: "90"
 ```
 

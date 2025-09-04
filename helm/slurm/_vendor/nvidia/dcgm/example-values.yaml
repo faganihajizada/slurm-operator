@@ -6,10 +6,9 @@ vendor:
     dcgm:
       enabled: true
       jobMappingDir: "/var/lib/dcgm-exporter/job-mapping"
-      autoDetect: true
       scriptPriority: "90"
 
-# Example GPU nodeset that will be auto-detected
+# Example GPU nodeset that will be automatically detected
 nodesets:
   gpu-nodes:
     enabled: true
@@ -19,7 +18,7 @@ nodesets:
       tag: 25.05-ubuntu24.04
     resources:
       limits:
-        nvidia.com/gpu: 2 # This triggers DCGM auto-detection
+        nvidia.com/gpu: 2 # This triggers automatic DCGM integration
         memory: 16Gi
     logfile:
       image:

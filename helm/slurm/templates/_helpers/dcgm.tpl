@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 Check if DCGM integration is enabled
 */}}
 {{- define "slurm.dcgm.enabled" -}}
-{{- and .Values.vendor.nvidia.dcgm.enabled .Values.vendor.nvidia.dcgm.autoDetect -}}
+{{- .Values.vendor.nvidia.dcgm.enabled -}}
 {{- end }}
 
 {{/*
