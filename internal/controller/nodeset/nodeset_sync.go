@@ -306,8 +306,8 @@ func (r *NodeSetReconciler) syncK8sNodeStateSynchronization(
 				}
 			}
 		} else {
-			// Node doesn't exist - log and continue processing
-			logger.V(1).Info("K8s node state synchronization: node not found, skipping synchronization check",
+			// Node lookup failed - log and continue processing
+			logger.V(1).Info("K8s node state synchronization: failed to get node, skipping synchronization check",
 				"pod", klog.KObj(pod), "node", pod.Spec.NodeName, "error", err)
 		}
 	}
