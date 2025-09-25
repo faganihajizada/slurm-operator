@@ -225,6 +225,10 @@ func (r *NodeSetReconciler) sync(
 		return err
 	}
 
+	if err := r.syncK8sNodeStateSynchronization(ctx, nodeset, pods); err != nil {
+		return err
+	}
+
 	if err := r.syncNodeSet(ctx, nodeset, pods, hash); err != nil {
 		return err
 	}
@@ -317,11 +321,6 @@ func (r *NodeSetReconciler) syncSlurm(
 	nodeset *slinkyv1alpha1.NodeSet,
 	pods []*corev1.Pod,
 ) error {
-	// Handle K8s node state synchronization first
-	if err := r.syncK8sNodeStateSynchronization(ctx, nodeset, pods); err != nil {
-		return err
-	}
-
 	nodeDeadlines, err := r.slurmControl.GetNodeDeadlines(ctx, nodeset, pods)
 	if err != nil {
 		return err
