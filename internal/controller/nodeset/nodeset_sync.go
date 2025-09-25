@@ -286,6 +286,31 @@ func (r *NodeSetReconciler) syncSlurm(
 		slurmNodeName := nodesetutils.GetNodeName(pod)
 		deadline := nodeDeadlines.Peek(slurmNodeName)
 
+		// K8s node state synchronization check
+		node := &corev1.Node{}
+		if err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node); err == nil {
+			logger := log.FromContext(ctx)
+			podIsCordoned := podutils.IsPodCordon(pod)
+
+			// If K8s node is cordoned but pod isn't, use existing function
+			if node.Spec.Unschedulable && !podIsCordoned {
+				logger.Info("K8s node state synchronization: node cordoned externally, cordoning pod for workload protection",
+					"pod", klog.KObj(pod), "node", node.Name)
+				return r.makePodCordonAndDrain(ctx, nodeset, pod)
+			}
+			// If K8s node is uncordoned but pod is cordoned, use existing function
+			if !node.Spec.Unschedulable && podIsCordoned {
+				logger.Info("K8s node state synchronization: node uncordoned externally, uncordoning pod",
+					"pod", klog.KObj(pod), "node", node.Name)
+				return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+			}
+		} else {
+			// Node doesn't exist - log and continue processing
+			logger := log.FromContext(ctx)
+			logger.V(1).Info("K8s node state synchronization: node not found, skipping synchronization check",
+				"pod", klog.KObj(pod), "node", pod.Spec.NodeName, "error", err)
+		}
+
 		toUpdate := pod.DeepCopy()
 		if deadline.IsZero() {
 			delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDeadline)
@@ -300,6 +325,22 @@ func (r *NodeSetReconciler) syncSlurm(
 			reason := fmt.Sprintf("Pod (%s) is cordoned", klog.KObj(pod))
 			if err := r.slurmControl.MakeNodeDrain(ctx, nodeset, pod, reason); err != nil {
 				return err
+			}
+
+			// Update drain state annotation for cordoned pods
+			if isDrained, err := r.slurmControl.IsNodeDrained(ctx, nodeset, pod); err == nil {
+				toUpdate := pod.DeepCopy()
+				if toUpdate.Annotations == nil {
+					toUpdate.Annotations = make(map[string]string)
+				}
+				if isDrained {
+					toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "drained"
+				} else {
+					toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "draining"
+				}
+				if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
+					return err
+				}
 			}
 		} else {
 			reason := fmt.Sprintf("Pod (%s) is uncordoned", klog.KObj(pod))
@@ -363,7 +404,8 @@ func (r *NodeSetReconciler) doPodScaleOut(
 
 	uncordonFn := func(i int) error {
 		pod := pods[i]
-		return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+
+		return r.handleUncordonWithSynchronization(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
 		return err
@@ -465,7 +507,8 @@ func (r *NodeSetReconciler) doPodScaleIn(
 
 	uncordonFn := func(i int) error {
 		pod := podsToKeep[i]
-		return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+
+		return r.handleUncordonWithSynchronization(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(podsToKeep), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
 		return err
@@ -593,7 +636,8 @@ func (r *NodeSetReconciler) doPodProcessing(
 	_, podsToKeep := r.splitUpdatePods(ctx, nodeset, pods, hash)
 	uncordonFn := func(i int) error {
 		pod := podsToKeep[i]
-		return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+
+		return r.handleUncordonWithSynchronization(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(podsToKeep), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
 		return err
@@ -654,6 +698,22 @@ func (r *NodeSetReconciler) makePodCordonAndDrain(
 		return err
 	}
 
+	// Check if drain is complete and update annotation
+	if isDrained, err := r.slurmControl.IsNodeDrained(ctx, nodeset, pod); err == nil {
+		toUpdate := pod.DeepCopy()
+		if toUpdate.Annotations == nil {
+			toUpdate.Annotations = make(map[string]string)
+		}
+		if isDrained {
+			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "drained"
+		} else {
+			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "draining"
+		}
+		if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -674,6 +734,8 @@ func (r *NodeSetReconciler) makePodCordon(
 		toUpdate.Annotations = make(map[string]string)
 	}
 	toUpdate.Annotations[slinkyv1alpha1.AnnotationPodCordon] = "true"
+	toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "draining"
+	toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainReason] = "k8s-node-cordoned"
 	if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
 		return err
 	}
@@ -710,11 +772,44 @@ func (r *NodeSetReconciler) makePodUncordon(ctx context.Context, pod *corev1.Pod
 	toUpdate := pod.DeepCopy()
 	logger.Info("Uncordon Pod", "Pod", klog.KObj(toUpdate))
 	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodCordon)
+	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDrainState)
+	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDrainReason)
 	if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// shouldSkipUncordon checks if a pod should skip uncordoning due to external node cordoning
+func (r *NodeSetReconciler) shouldSkipUncordon(ctx context.Context, pod *corev1.Pod) bool {
+	// Check if pod is currently cordoned
+	if !podutils.IsPodCordon(pod) {
+		return false // Pod is not cordoned, no need to skip
+	}
+
+	// Check if the Kubernetes node is externally cordoned
+	node := &corev1.Node{}
+	if err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node); err != nil {
+		return false // Can't get node info, don't skip
+	}
+
+	// Skip uncordoning if node is externally cordoned
+	return node.Spec.Unschedulable
+}
+
+// handleUncordonWithSynchronization handles uncordoning with K8s node state synchronization
+func (r *NodeSetReconciler) handleUncordonWithSynchronization(ctx context.Context, nodeset *slinkyv1alpha1.NodeSet, pod *corev1.Pod) error {
+	logger := log.FromContext(ctx)
+
+	// K8s node state synchronization: skip uncordoning pods on externally cordoned nodes
+	if r.shouldSkipUncordon(ctx, pod) {
+		logger.V(1).Info("Skipping uncordon for pod on externally cordoned node",
+			"pod", klog.KObj(pod), "node", pod.Spec.NodeName)
+		return nil // Skip uncordoning this pod
+	}
+
+	return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
 }
 
 // syncUpdate will synchronize NodeSet pod version updates based on update type.

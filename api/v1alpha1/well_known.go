@@ -27,6 +27,14 @@ const (
 	// workload by. Pods an earlier daedline are preferred to be deleted before pods with a later deadline.
 	// NOTE: this is honored on a best-effort basis, and does not offer guarantees on pod deletion order.
 	AnnotationPodDeadline = NodeSetPrefix + "pod-deadline"
+
+	// AnnotationPodDrainState indicates the current drain state of a NodeSet Pod.
+	// Possible values: "draining", "drained", "undraining"
+	AnnotationPodDrainState = NodeSetPrefix + "pod-drain-state"
+
+	// AnnotationPodDrainReason indicates why a NodeSet Pod was drained.
+	// Possible values: "k8s-node-cordoned", "manual", "scale-in", "update"
+	AnnotationPodDrainReason = NodeSetPrefix + "pod-drain-reason"
 )
 
 // Well Known Labels
