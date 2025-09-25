@@ -225,6 +225,10 @@ func (r *NodeSetReconciler) sync(
 		return err
 	}
 
+	if err := r.syncK8sNodeStateSynchronization(ctx, nodeset, pods); err != nil {
+		return err
+	}
+
 	if err := r.syncNodeSet(ctx, nodeset, pods, hash); err != nil {
 		return err
 	}
@@ -265,6 +269,48 @@ func (r *NodeSetReconciler) syncClusterWorkerService(ctx context.Context, nodese
 
 	if err := objectutils.SyncObject(r.Client, ctx, service, true); err != nil {
 		return fmt.Errorf("failed to sync service (%s): %w", klog.KObj(service), err)
+	}
+
+	return nil
+}
+
+// syncK8sNodeStateSynchronization handles Kubernetes node state synchronization
+// for cordoned/uncordoned nodes and their corresponding NodeSet pods.
+func (r *NodeSetReconciler) syncK8sNodeStateSynchronization(
+	ctx context.Context,
+	nodeset *slinkyv1alpha1.NodeSet,
+	pods []*corev1.Pod,
+) error {
+	logger := log.FromContext(ctx)
+
+	for _, pod := range pods {
+		// K8s node state synchronization check
+		node := &corev1.Node{}
+		if err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node); err != nil {
+			// Node lookup failed - log and continue processing
+			logger.V(1).Info("K8s node state synchronization: failed to get node, skipping synchronization check",
+				"pod", klog.KObj(pod), "node", pod.Spec.NodeName, "error", err)
+			continue
+		}
+
+		podIsCordoned := podutils.IsPodCordon(pod)
+
+		// If K8s node is cordoned but pod isn't, cordon the pod
+		if node.Spec.Unschedulable && !podIsCordoned {
+			logger.Info("K8s node state synchronization: node cordoned externally, cordoning pod for workload protection",
+				"pod", klog.KObj(pod), "node", node.Name)
+			if err := r.makePodCordonAndDrain(ctx, nodeset, pod); err != nil {
+				return err
+			}
+		}
+		// If K8s node is uncordoned but pod is cordoned, uncordon the pod
+		if !node.Spec.Unschedulable && podIsCordoned {
+			logger.Info("K8s node state synchronization: node uncordoned externally, uncordoning pod",
+				"pod", klog.KObj(pod), "node", node.Name)
+			if err := r.makePodUncordonAndUndrain(ctx, nodeset, pod); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -363,7 +409,8 @@ func (r *NodeSetReconciler) doPodScaleOut(
 
 	uncordonFn := func(i int) error {
 		pod := pods[i]
-		return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+
+		return r.handleUncordonWithSynchronization(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
 		return err
@@ -465,7 +512,8 @@ func (r *NodeSetReconciler) doPodScaleIn(
 
 	uncordonFn := func(i int) error {
 		pod := podsToKeep[i]
-		return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+
+		return r.handleUncordonWithSynchronization(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(podsToKeep), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
 		return err
@@ -593,7 +641,8 @@ func (r *NodeSetReconciler) doPodProcessing(
 	_, podsToKeep := r.splitUpdatePods(ctx, nodeset, pods, hash)
 	uncordonFn := func(i int) error {
 		pod := podsToKeep[i]
-		return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+
+		return r.handleUncordonWithSynchronization(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(podsToKeep), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
 		return err
@@ -715,6 +764,37 @@ func (r *NodeSetReconciler) makePodUncordon(ctx context.Context, pod *corev1.Pod
 	}
 
 	return nil
+}
+
+// handleUncordonWithSynchronization handles uncordoning with K8s node state synchronization
+func (r *NodeSetReconciler) handleUncordonWithSynchronization(ctx context.Context, nodeset *slinkyv1alpha1.NodeSet, pod *corev1.Pod) error {
+	logger := log.FromContext(ctx)
+
+	// K8s node state synchronization: skip uncordoning pods on externally cordoned nodes
+	if r.shouldSkipUncordon(ctx, pod) {
+		logger.V(1).Info("Skipping uncordon for pod on externally cordoned node",
+			"pod", klog.KObj(pod), "node", pod.Spec.NodeName)
+		return nil // Skip uncordoning this pod
+	}
+
+	return r.makePodUncordonAndUndrain(ctx, nodeset, pod)
+}
+
+// shouldSkipUncordon checks if a pod should skip uncordoning due to external node cordoning
+func (r *NodeSetReconciler) shouldSkipUncordon(ctx context.Context, pod *corev1.Pod) bool {
+	// Check if pod is currently cordoned
+	if !podutils.IsPodCordon(pod) {
+		return false // Pod is not cordoned, no need to skip
+	}
+
+	// Check if the Kubernetes node is externally cordoned
+	node := &corev1.Node{}
+	if err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node); err != nil {
+		return false // Can't get node info, don't skip
+	}
+
+	// Skip uncordoning if node is externally cordoned
+	return node.Spec.Unschedulable
 }
 
 // syncUpdate will synchronize NodeSet pod version updates based on update type.

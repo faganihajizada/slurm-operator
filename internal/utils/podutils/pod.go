@@ -5,7 +5,6 @@ package podutils
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 
 	slinkyv1alpha1 "github.com/SlinkyProject/slurm-operator/api/v1alpha1"
@@ -24,10 +23,6 @@ func IsRunningAndReady(pod *corev1.Pod) bool {
 // isRunning returns true if pod is in the PodRunning Phase.
 func IsRunning(pod *corev1.Pod) bool {
 	return pod.Status.Phase == corev1.PodRunning
-}
-
-func IsRunningAndAvailable(pod *corev1.Pod, minReadySeconds int32) bool {
-	return podutil.IsPodAvailable(pod, minReadySeconds, metav1.Now())
 }
 
 // isCreated returns true if pod has been created and is maintained by the API server
