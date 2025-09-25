@@ -29,11 +29,9 @@ const (
 	AnnotationPodDeadline = NodeSetPrefix + "pod-deadline"
 
 	// AnnotationPodDrainState indicates the current drain state of a NodeSet Pod.
-	// Possible values: "draining", "drained", "undraining"
 	AnnotationPodDrainState = NodeSetPrefix + "pod-drain-state"
 
 	// AnnotationPodDrainReason indicates why a NodeSet Pod was drained.
-	// Possible values: "k8s-node-cordoned", "manual", "scale-in", "update"
 	AnnotationPodDrainReason = NodeSetPrefix + "pod-drain-reason"
 )
 
@@ -46,4 +44,21 @@ const (
 	// LabelNodeSetPodIndex indicates the pod's ordinal.
 	// NOTE: Set by the NodeSet controller.
 	LabelNodeSetPodIndex = NodeSetPrefix + "pod-index"
+)
+
+// AnnotationPodDrainState value type
+type AnnotationPodDrainStateValue string
+
+// AnnotationPodDrainState value enum
+const (
+	AnnotationPodDrainStateDraining AnnotationPodDrainStateValue = "draining"
+	AnnotationPodDrainStateDrained  AnnotationPodDrainStateValue = "drained"
+)
+
+// AnnotationPodDrainReason value type
+type AnnotationPodDrainReasonValue string
+
+// AnnotationPodDrainReason value enum
+const (
+	AnnotationPodDrainReasonKubeNodeCordon AnnotationPodDrainReasonValue = "k8s-node-cordoned"
 )

@@ -2245,7 +2245,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 					return pod
 				}(),
 			},
-			wantDrainState: "draining",
+			wantDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
 			wantErr:        false,
 		},
 		{
@@ -2279,7 +2279,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 					return pod
 				}(),
 			},
-			wantDrainState: "drained",
+			wantDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
 			wantErr:        false,
 		},
 		{
@@ -2313,7 +2313,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 					return pod
 				}(),
 			},
-			wantDrainState: "drained",
+			wantDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
 			wantErr:        false,
 		},
 	}
@@ -2329,9 +2329,9 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 						toUpdate.Annotations = make(map[string]string)
 					}
 					if isDrained {
-						toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "drained"
+						toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
 					} else {
-						toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = "draining"
+						toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
 					}
 					if err := r.Patch(tt.args.ctx, toUpdate, client.StrategicMergeFrom(tt.args.pod)); (err != nil) != tt.wantErr {
 						t.Errorf("Patch() error = %v, wantErr %v", err, tt.wantErr)

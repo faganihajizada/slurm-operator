@@ -370,10 +370,10 @@ func TestGetPodDrainState(t *testing.T) {
 	var podWithDraining, podWithDrained, podWithEmpty, podWithInvalid, podWithoutAnnotation corev1.Pod
 
 	podWithDraining.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "draining",
+		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
 	}
 	podWithDrained.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "drained",
+		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
 	}
 	podWithEmpty.ObjectMeta.Annotations = map[string]string{
 		slinkyv1alpha1.AnnotationPodDrainState: "",
@@ -393,12 +393,12 @@ func TestGetPodDrainState(t *testing.T) {
 		{
 			name: "Pod with draining state",
 			args: args{pod: &podWithDraining},
-			want: "draining",
+			want: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
 		},
 		{
 			name: "Pod with drained state",
 			args: args{pod: &podWithDrained},
-			want: "drained",
+			want: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
 		},
 		{
 			name: "Pod with empty drain state",
@@ -472,10 +472,10 @@ func TestIsPodDraining(t *testing.T) {
 	var podDraining, podDrained, podWithEmpty, podWithInvalid, podWithoutAnnotation corev1.Pod
 
 	podDraining.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "draining",
+		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
 	}
 	podDrained.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "drained",
+		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
 	}
 	podWithEmpty.ObjectMeta.Annotations = map[string]string{
 		slinkyv1alpha1.AnnotationPodDrainState: "",
@@ -531,10 +531,10 @@ func TestIsPodDrained(t *testing.T) {
 	var podDraining, podDrained, podWithEmpty, podWithInvalid, podWithoutAnnotation corev1.Pod
 
 	podDraining.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "draining",
+		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
 	}
 	podDrained.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "drained",
+		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
 	}
 	podWithEmpty.ObjectMeta.Annotations = map[string]string{
 		slinkyv1alpha1.AnnotationPodDrainState: "",

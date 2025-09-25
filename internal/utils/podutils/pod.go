@@ -28,12 +28,12 @@ func GetPodDrainReason(pod *corev1.Pod) string {
 
 // IsPodDraining returns true if the pod is currently draining.
 func IsPodDraining(pod *corev1.Pod) bool {
-	return GetPodDrainState(pod) == "draining"
+	return GetPodDrainState(pod) == string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
 }
 
 // IsPodDrained returns true if the pod has been drained.
 func IsPodDrained(pod *corev1.Pod) bool {
-	return GetPodDrainState(pod) == "drained"
+	return GetPodDrainState(pod) == string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
 }
 
 // isRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
