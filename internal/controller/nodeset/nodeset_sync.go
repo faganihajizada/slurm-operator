@@ -787,7 +787,9 @@ func (r *NodeSetReconciler) makePodUncordon(ctx context.Context, pod *corev1.Pod
 	return nil
 }
 
-// updateDrainStateForCordonedPods updates drain state annotations for cordoned pods
+// updateDrainStateForCordonedPods updates drain state annotations for cordoned pods.
+// These annotations provide external visibility for kubernetes break-fix and maintenance
+// automation tools to determine when it's safe to perform node maintenance operations.
 func (r *NodeSetReconciler) updateDrainStateForCordonedPods(
 	ctx context.Context,
 	nodeset *slinkyv1alpha1.NodeSet,

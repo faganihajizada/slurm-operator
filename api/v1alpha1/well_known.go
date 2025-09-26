@@ -29,9 +29,15 @@ const (
 	AnnotationPodDeadline = NodeSetPrefix + "pod-deadline"
 
 	// AnnotationPodDrainState indicates the current drain state of a NodeSet Pod.
+	// This annotation is designed to be used for external integration with kubernetes break-fix and
+	// maintenance automation tools. External tools can query this annotation to determine
+	// when it's safe to perform node maintenance operations.
+	// Values: "draining" (jobs are finishing), "drained" (ready for maintenance)
 	AnnotationPodDrainState = NodeSetPrefix + "pod-drain-state"
 
 	// AnnotationPodDrainReason indicates why a NodeSet Pod was drained.
+	// This annotation provides context for external automation tools about the trigger
+	// that initiated the drain operation (e.g., K8s node cordoning).
 	AnnotationPodDrainReason = NodeSetPrefix + "pod-drain-reason"
 )
 
@@ -51,8 +57,15 @@ type AnnotationPodDrainStateValue string
 
 // AnnotationPodDrainState value enum
 const (
+	// AnnotationPodDrainStateDraining indicates the Slurm node is currently draining.
+	// Jobs are finishing and the node is not accepting new work. External tools should
+	// wait for the "drained" state before performing maintenance operations.
 	AnnotationPodDrainStateDraining AnnotationPodDrainStateValue = "draining"
-	AnnotationPodDrainStateDrained  AnnotationPodDrainStateValue = "drained"
+
+	// AnnotationPodDrainStateDrained indicates the Slurm node has been fully drained.
+	// All jobs have completed and the node is ready for maintenance operations.
+	// External break-fix tools can safely proceed with node maintenance at this point.
+	AnnotationPodDrainStateDrained AnnotationPodDrainStateValue = "drained"
 )
 
 // AnnotationPodDrainReason value type
@@ -60,5 +73,7 @@ type AnnotationPodDrainReasonValue string
 
 // AnnotationPodDrainReason value enum
 const (
+	// AnnotationPodDrainReasonKubeNodeCordon indicates the drain was triggered by
+	// Kubernetes node cordoning
 	AnnotationPodDrainReasonKubeNodeCordon AnnotationPodDrainReasonValue = "k8s-node-cordoned"
 )
