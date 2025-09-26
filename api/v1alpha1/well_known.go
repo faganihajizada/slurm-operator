@@ -28,17 +28,17 @@ const (
 	// NOTE: this is honored on a best-effort basis, and does not offer guarantees on pod deletion order.
 	AnnotationPodDeadline = NodeSetPrefix + "pod-deadline"
 
-	// AnnotationPodDrainState indicates the current drain state of a NodeSet Pod.
+	// AnnotationSlurmNodeDrainState indicates the current drain state of the underlying Slurm node.
 	// This annotation is designed to be used for external integration with kubernetes break-fix and
 	// maintenance automation tools. External tools can query this annotation to determine
 	// when it's safe to perform node maintenance operations.
 	// Values: "draining" (jobs are finishing), "drained" (ready for maintenance)
-	AnnotationPodDrainState = NodeSetPrefix + "pod-drain-state"
+	AnnotationSlurmNodeDrainState = NodeSetPrefix + "slurmnode-drain-state"
 
-	// AnnotationPodDrainReason indicates why a NodeSet Pod was drained.
+	// AnnotationSlurmNodeDrainReason indicates why the underlying Slurm node was drained.
 	// This annotation provides context for external automation tools about the trigger
 	// that initiated the drain operation (e.g., K8s node cordoning).
-	AnnotationPodDrainReason = NodeSetPrefix + "pod-drain-reason"
+	AnnotationSlurmNodeDrainReason = NodeSetPrefix + "slurmnode-drain-reason"
 )
 
 // Well Known Labels
@@ -52,28 +52,28 @@ const (
 	LabelNodeSetPodIndex = NodeSetPrefix + "pod-index"
 )
 
-// AnnotationPodDrainState value type
-type AnnotationPodDrainStateValue string
+// AnnotationSlurmNodeDrainState value type
+type AnnotationSlurmNodeDrainStateValue string
 
-// AnnotationPodDrainState value enum
+// AnnotationSlurmNodeDrainState value enum
 const (
-	// AnnotationPodDrainStateDraining indicates the Slurm node is currently draining.
+	// AnnotationSlurmNodeDrainStateDraining indicates the Slurm node is currently draining.
 	// Jobs are finishing and the node is not accepting new work. External tools should
 	// wait for the "drained" state before performing maintenance operations.
-	AnnotationPodDrainStateDraining AnnotationPodDrainStateValue = "draining"
+	AnnotationSlurmNodeDrainStateDraining AnnotationSlurmNodeDrainStateValue = "draining"
 
-	// AnnotationPodDrainStateDrained indicates the Slurm node has been fully drained.
+	// AnnotationSlurmNodeDrainStateDrained indicates the Slurm node has been fully drained.
 	// All jobs have completed and the node is ready for maintenance operations.
 	// External break-fix tools can safely proceed with node maintenance at this point.
-	AnnotationPodDrainStateDrained AnnotationPodDrainStateValue = "drained"
+	AnnotationSlurmNodeDrainStateDrained AnnotationSlurmNodeDrainStateValue = "drained"
 )
 
-// AnnotationPodDrainReason value type
-type AnnotationPodDrainReasonValue string
+// AnnotationSlurmNodeDrainReason value type
+type AnnotationSlurmNodeDrainReasonValue string
 
-// AnnotationPodDrainReason value enum
+// AnnotationSlurmNodeDrainReason value enum
 const (
-	// AnnotationPodDrainReasonKubeNodeCordon indicates the drain was triggered by
-	// Kubernetes node cordoning
-	AnnotationPodDrainReasonKubeNodeCordon AnnotationPodDrainReasonValue = "k8s-node-cordoned"
+	// AnnotationSlurmNodeDrainReasonK8sCordon indicates the drain was triggered by
+	// Kubernetes node cordoning (e.g., by cloud vendor break-fix automation).
+	AnnotationSlurmNodeDrainReasonK8sCordon AnnotationSlurmNodeDrainReasonValue = "k8s-node-cordoned"
 )

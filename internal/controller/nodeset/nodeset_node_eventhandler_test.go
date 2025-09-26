@@ -170,8 +170,7 @@ func Test_nodeEventHandler_Update(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "slurm-worker-cpu-1-0",
 							Namespace: "slinky",
-							Labels:    map[string]string{
-							},
+							Labels:    map[string]string{},
 						},
 						Spec: corev1.PodSpec{
 							NodeName: "test-node",
@@ -211,8 +210,7 @@ func Test_nodeEventHandler_Update(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "slurm-worker-cpu-1-0",
 							Namespace: "slinky",
-							Labels:    map[string]string{
-							},
+							Labels:    map[string]string{},
 						},
 						Spec: corev1.PodSpec{
 							NodeName: "test-node",

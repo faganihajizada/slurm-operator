@@ -15,14 +15,14 @@ func IsPodCordon(pod *corev1.Pod) bool {
 	return pod.GetAnnotations()[slinkyv1alpha1.AnnotationPodCordon] == "true"
 }
 
-// GetPodDrainState returns the current drain state of a pod.
-func GetPodDrainState(pod *corev1.Pod) string {
-	return pod.GetAnnotations()[slinkyv1alpha1.AnnotationPodDrainState]
+// GetSlurmNodeDrainState returns the current drain state of the underlying Slurm node.
+func GetSlurmNodeDrainState(pod *corev1.Pod) string {
+	return pod.GetAnnotations()[slinkyv1alpha1.AnnotationSlurmNodeDrainState]
 }
 
-// GetPodDrainReason returns the reason why a pod was drained.
-func GetPodDrainReason(pod *corev1.Pod) string {
-	return pod.GetAnnotations()[slinkyv1alpha1.AnnotationPodDrainReason]
+// GetSlurmNodeDrainReason returns the reason why the underlying Slurm node was drained.
+func GetSlurmNodeDrainReason(pod *corev1.Pod) string {
+	return pod.GetAnnotations()[slinkyv1alpha1.AnnotationSlurmNodeDrainReason]
 }
 
 // isRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.

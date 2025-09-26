@@ -1069,10 +1069,10 @@ func TestNodeSetReconciler_makePodCordonAndDrain(t *testing.T) {
 					t.Errorf("IsPodCordon() = %v", ok)
 				}
 				// Check drain state annotations
-				if drainState := podutils.GetPodDrainState(gotPod); drainState == "" {
+				if drainState := podutils.GetSlurmNodeDrainState(gotPod); drainState == "" {
 					t.Errorf("Expected drain state annotation, got empty")
 				}
-				if drainReason := podutils.GetPodDrainReason(gotPod); drainReason == "" {
+				if drainReason := podutils.GetSlurmNodeDrainReason(gotPod); drainReason == "" {
 					t.Errorf("Expected drain reason annotation, got empty")
 				}
 			}
@@ -2245,7 +2245,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 					return pod
 				}(),
 			},
-			wantDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
+			wantDrainState: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDraining),
 			wantErr:        false,
 		},
 		{
@@ -2279,7 +2279,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 					return pod
 				}(),
 			},
-			wantDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
+			wantDrainState: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDrained),
 			wantErr:        false,
 		},
 		{
@@ -2313,7 +2313,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 					return pod
 				}(),
 			},
-			wantDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
+			wantDrainState: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDrained),
 			wantErr:        false,
 		},
 	}
@@ -2329,9 +2329,9 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 						toUpdate.Annotations = make(map[string]string)
 					}
 					if isDrained {
-						toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
+						toUpdate.Annotations[slinkyv1alpha1.AnnotationSlurmNodeDrainState] = string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDrained)
 					} else {
-						toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
+						toUpdate.Annotations[slinkyv1alpha1.AnnotationSlurmNodeDrainState] = string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDraining)
 					}
 					if err := r.Patch(tt.args.ctx, toUpdate, client.StrategicMergeFrom(tt.args.pod)); (err != nil) != tt.wantErr {
 						t.Errorf("Patch() error = %v, wantErr %v", err, tt.wantErr)
@@ -2343,7 +2343,7 @@ func TestNodeSetReconciler_drainStateMonitoring(t *testing.T) {
 			if err := r.Get(tt.args.ctx, client.ObjectKeyFromObject(tt.args.pod), gotPod); err != nil {
 				t.Errorf("Get() error = %v", err)
 			}
-			if gotState := podutils.GetPodDrainState(gotPod); gotState != tt.wantDrainState {
+			if gotState := podutils.GetSlurmNodeDrainState(gotPod); gotState != tt.wantDrainState {
 				t.Errorf("Expected drain state %v, got %v", tt.wantDrainState, gotState)
 			}
 		})

@@ -740,8 +740,8 @@ func (r *NodeSetReconciler) makePodCordon(
 		toUpdate.Annotations = make(map[string]string)
 	}
 	toUpdate.Annotations[slinkyv1alpha1.AnnotationPodCordon] = "true"
-	toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
-	toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainReason] = string(slinkyv1alpha1.AnnotationPodDrainReasonKubeNodeCordon)
+	toUpdate.Annotations[slinkyv1alpha1.AnnotationSlurmNodeDrainState] = string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDraining)
+	toUpdate.Annotations[slinkyv1alpha1.AnnotationSlurmNodeDrainReason] = string(slinkyv1alpha1.AnnotationSlurmNodeDrainReasonK8sCordon)
 	if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
 		return err
 	}
@@ -778,8 +778,8 @@ func (r *NodeSetReconciler) makePodUncordon(ctx context.Context, pod *corev1.Pod
 	toUpdate := pod.DeepCopy()
 	logger.Info("Uncordon Pod", "Pod", klog.KObj(toUpdate))
 	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodCordon)
-	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDrainState)
-	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDrainReason)
+	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationSlurmNodeDrainState)
+	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationSlurmNodeDrainReason)
 	if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
 		return err
 	}
@@ -821,9 +821,9 @@ func (r *NodeSetReconciler) updateDrainStateForCordonedPods(
 			toUpdate.Annotations = make(map[string]string)
 		}
 		if isDrained {
-			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
+			toUpdate.Annotations[slinkyv1alpha1.AnnotationSlurmNodeDrainState] = string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDrained)
 		} else {
-			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
+			toUpdate.Annotations[slinkyv1alpha1.AnnotationSlurmNodeDrainState] = string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDraining)
 		}
 		if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
 			return err

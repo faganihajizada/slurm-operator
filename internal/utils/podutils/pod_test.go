@@ -315,20 +315,20 @@ func TestIsHealthy(t *testing.T) {
 	}
 }
 
-func TestGetPodDrainState(t *testing.T) {
+func TestGetSlurmNodeDrainState(t *testing.T) {
 	var podWithDraining, podWithDrained, podWithEmpty, podWithInvalid, podWithoutAnnotation corev1.Pod
 
-	podWithDraining.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
+	podWithDraining.Annotations = map[string]string{
+		slinkyv1alpha1.AnnotationSlurmNodeDrainState: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDraining),
 	}
-	podWithDrained.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
+	podWithDrained.Annotations = map[string]string{
+		slinkyv1alpha1.AnnotationSlurmNodeDrainState: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDrained),
 	}
-	podWithEmpty.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "",
+	podWithEmpty.Annotations = map[string]string{
+		slinkyv1alpha1.AnnotationSlurmNodeDrainState: "",
 	}
-	podWithInvalid.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainState: "invalid-state",
+	podWithInvalid.Annotations = map[string]string{
+		slinkyv1alpha1.AnnotationSlurmNodeDrainState: "invalid-state",
 	}
 
 	type args struct {
@@ -342,12 +342,12 @@ func TestGetPodDrainState(t *testing.T) {
 		{
 			name: "Pod with draining state",
 			args: args{pod: &podWithDraining},
-			want: string(slinkyv1alpha1.AnnotationPodDrainStateDraining),
+			want: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDraining),
 		},
 		{
 			name: "Pod with drained state",
 			args: args{pod: &podWithDrained},
-			want: string(slinkyv1alpha1.AnnotationPodDrainStateDrained),
+			want: string(slinkyv1alpha1.AnnotationSlurmNodeDrainStateDrained),
 		},
 		{
 			name: "Pod with empty drain state",
@@ -367,21 +367,21 @@ func TestGetPodDrainState(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetPodDrainState(tt.args.pod); got != tt.want {
-				t.Errorf("GetPodDrainState() = %v, want %v", got, tt.want)
+			if got := GetSlurmNodeDrainState(tt.args.pod); got != tt.want {
+				t.Errorf("GetSlurmNodeDrainState() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestGetPodDrainReason(t *testing.T) {
+func TestGetSlurmNodeDrainReason(t *testing.T) {
 	var podWithReason, podWithEmpty, podWithoutAnnotation corev1.Pod
 
-	podWithReason.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainReason: "k8s-node-cordoned",
+	podWithReason.Annotations = map[string]string{
+		slinkyv1alpha1.AnnotationSlurmNodeDrainReason: "k8s-node-cordoned",
 	}
-	podWithEmpty.ObjectMeta.Annotations = map[string]string{
-		slinkyv1alpha1.AnnotationPodDrainReason: "",
+	podWithEmpty.Annotations = map[string]string{
+		slinkyv1alpha1.AnnotationSlurmNodeDrainReason: "",
 	}
 
 	type args struct {
@@ -410,8 +410,8 @@ func TestGetPodDrainReason(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetPodDrainReason(tt.args.pod); got != tt.want {
-				t.Errorf("GetPodDrainReason() = %v, want %v", got, tt.want)
+			if got := GetSlurmNodeDrainReason(tt.args.pod); got != tt.want {
+				t.Errorf("GetSlurmNodeDrainReason() = %v, want %v", got, tt.want)
 			}
 		})
 	}
