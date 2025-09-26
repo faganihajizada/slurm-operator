@@ -283,32 +283,45 @@ func (r *NodeSetReconciler) syncK8sNodeStateSynchronization(
 ) error {
 	logger := log.FromContext(ctx)
 
+	// Track pods that need drain state updates
+	podsNeedingDrainStateUpdate := make([]*corev1.Pod, 0)
+
 	for _, pod := range pods {
 		// K8s node state synchronization check
 		node := &corev1.Node{}
-		if err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node); err == nil {
-			podIsCordoned := podutils.IsPodCordon(pod)
-
-			// If K8s node is cordoned but pod isn't, cordon the pod
-			if node.Spec.Unschedulable && !podIsCordoned {
-				logger.Info("K8s node state synchronization: node cordoned externally, cordoning pod for workload protection",
-					"pod", klog.KObj(pod), "node", node.Name)
-				if err := r.makePodCordonAndDrain(ctx, nodeset, pod); err != nil {
-					return err
-				}
-			}
-			// If K8s node is uncordoned but pod is cordoned, uncordon the pod
-			if !node.Spec.Unschedulable && podIsCordoned {
-				logger.Info("K8s node state synchronization: node uncordoned externally, uncordoning pod",
-					"pod", klog.KObj(pod), "node", node.Name)
-				if err := r.makePodUncordonAndUndrain(ctx, nodeset, pod); err != nil {
-					return err
-				}
-			}
-		} else {
+		if err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node); err != nil {
 			// Node lookup failed - log and continue processing
 			logger.V(1).Info("K8s node state synchronization: failed to get node, skipping synchronization check",
 				"pod", klog.KObj(pod), "node", pod.Spec.NodeName, "error", err)
+			continue
+		}
+
+		podIsCordoned := podutils.IsPodCordon(pod)
+
+		// If K8s node is cordoned but pod isn't, cordon the pod
+		if node.Spec.Unschedulable && !podIsCordoned {
+			logger.Info("K8s node state synchronization: node cordoned externally, cordoning pod for workload protection",
+				"pod", klog.KObj(pod), "node", node.Name)
+			if err := r.makePodCordonAndDrain(ctx, nodeset, pod); err != nil {
+				return err
+			}
+			// Track this pod for drain state update
+			podsNeedingDrainStateUpdate = append(podsNeedingDrainStateUpdate, pod)
+		}
+		// If K8s node is uncordoned but pod is cordoned, uncordon the pod
+		if !node.Spec.Unschedulable && podIsCordoned {
+			logger.Info("K8s node state synchronization: node uncordoned externally, uncordoning pod",
+				"pod", klog.KObj(pod), "node", node.Name)
+			if err := r.makePodUncordonAndUndrain(ctx, nodeset, pod); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Update drain state annotations for pods that were cordoned using batch processing
+	if len(podsNeedingDrainStateUpdate) > 0 {
+		if err := r.updateDrainStateForCordonedPods(ctx, nodeset, podsNeedingDrainStateUpdate); err != nil {
+			return err
 		}
 	}
 
@@ -346,22 +359,6 @@ func (r *NodeSetReconciler) syncSlurm(
 			if err := r.slurmControl.MakeNodeDrain(ctx, nodeset, pod, reason); err != nil {
 				return err
 			}
-
-			// Update drain state annotation for cordoned pods
-			if isDrained, err := r.slurmControl.IsNodeDrained(ctx, nodeset, pod); err == nil {
-				toUpdate := pod.DeepCopy()
-				if toUpdate.Annotations == nil {
-					toUpdate.Annotations = make(map[string]string)
-				}
-				if isDrained {
-					toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
-				} else {
-					toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
-				}
-				if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
-					return err
-				}
-			}
 		} else {
 			reason := fmt.Sprintf("Pod (%s) is uncordoned", klog.KObj(pod))
 			if err := r.slurmControl.MakeNodeUndrain(ctx, nodeset, pod, reason); err != nil {
@@ -371,6 +368,11 @@ func (r *NodeSetReconciler) syncSlurm(
 		return nil
 	}
 	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, syncSlurmFn); err != nil {
+		return err
+	}
+
+	// Update drain state annotations for cordoned pods using batch processing
+	if err := r.updateDrainStateForCordonedPods(ctx, nodeset, pods); err != nil {
 		return err
 	}
 
@@ -718,22 +720,6 @@ func (r *NodeSetReconciler) makePodCordonAndDrain(
 		return err
 	}
 
-	// Check if drain is complete and update annotation
-	if isDrained, err := r.slurmControl.IsNodeDrained(ctx, nodeset, pod); err == nil {
-		toUpdate := pod.DeepCopy()
-		if toUpdate.Annotations == nil {
-			toUpdate.Annotations = make(map[string]string)
-		}
-		if isDrained {
-			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
-		} else {
-			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
-		}
-		if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -795,6 +781,55 @@ func (r *NodeSetReconciler) makePodUncordon(ctx context.Context, pod *corev1.Pod
 	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDrainState)
 	delete(toUpdate.Annotations, slinkyv1alpha1.AnnotationPodDrainReason)
 	if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// updateDrainStateForCordonedPods updates drain state annotations for cordoned pods
+func (r *NodeSetReconciler) updateDrainStateForCordonedPods(
+	ctx context.Context,
+	nodeset *slinkyv1alpha1.NodeSet,
+	pods []*corev1.Pod,
+) error {
+	// Filter to only cordoned pods
+	cordonedPods := make([]*corev1.Pod, 0)
+	for _, pod := range pods {
+		if podutils.IsPodCordon(pod) {
+			cordonedPods = append(cordonedPods, pod)
+		}
+	}
+
+	if len(cordonedPods) == 0 {
+		return nil
+	}
+
+	updateDrainStateFn := func(i int) error {
+		pod := cordonedPods[i]
+
+		// Check if drain is complete and update annotation
+		isDrained, err := r.slurmControl.IsNodeDrained(ctx, nodeset, pod)
+		if err != nil {
+			return err
+		}
+
+		toUpdate := pod.DeepCopy()
+		if toUpdate.Annotations == nil {
+			toUpdate.Annotations = make(map[string]string)
+		}
+		if isDrained {
+			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDrained)
+		} else {
+			toUpdate.Annotations[slinkyv1alpha1.AnnotationPodDrainState] = string(slinkyv1alpha1.AnnotationPodDrainStateDraining)
+		}
+		if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if _, err := utils.SlowStartBatch(len(cordonedPods), utils.SlowStartInitialBatchSize, updateDrainStateFn); err != nil {
 		return err
 	}
 
