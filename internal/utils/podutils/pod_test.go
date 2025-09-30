@@ -73,6 +73,57 @@ func newPod(now metav1.Time, ready bool, beforeSec int) *corev1.Pod {
 		},
 	}
 }
+func TestIsRunningAndAvailable(t *testing.T) {
+	type args struct {
+		pod             *corev1.Pod
+		minReadySeconds int32
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Not ready before 0",
+			args: args{
+				pod:             newPod(metav1.Now(), false, 0),
+				minReadySeconds: 0,
+			},
+			want: false,
+		},
+		{
+			name: "Ready before 0",
+			args: args{
+				pod:             newPod(metav1.Now(), true, 0),
+				minReadySeconds: 1,
+			},
+			want: false,
+		},
+		{
+			name: "Ready 0",
+			args: args{
+				pod:             newPod(metav1.Now(), true, 0),
+				minReadySeconds: 0,
+			},
+			want: true,
+		},
+		{
+			name: "Ready after 50",
+			args: args{
+				pod:             newPod(metav1.Now(), true, 51),
+				minReadySeconds: 50,
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsRunningAndAvailable(tt.args.pod, tt.args.minReadySeconds); got != tt.want {
+				t.Errorf("IsRunningAndAvailable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestIsCreated(t *testing.T) {
 	var podA, podB corev1.Pod
