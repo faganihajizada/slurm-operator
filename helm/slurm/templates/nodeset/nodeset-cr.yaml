@@ -66,11 +66,6 @@ spec:
   {{- with $nodeset.updateStrategy }}
   updateStrategy:
     {{- toYaml . | nindent 4 }}
-  {{- else }}
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 25%
   {{- end }}{{- /* with $nodeset.updateStrategy */}}
 {{- end }}{{- /* $nodeset.enabled */}}
 {{- end }}{{- /* range $nodeset := $.Values.nodesets */}}
