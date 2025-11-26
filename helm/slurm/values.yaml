@@ -643,6 +643,11 @@ nodesets:
       configMap: {}
         # State: UP
         # MaxTime: UNLIMITED
+    # SSH configuration for this NodeSet.
+    # ssh:
+      # -- Enable SSH access to worker pods with pam_slurm_adopt.
+      # Ref: https://slurm.schedmd.com/pam_slurm_adopt.html
+      # enabled: false
     # -- Enable propagation of container `resources.limits` into slurmd.
     useResourceLimits: true
     # Update strategy configuration.

@@ -68,7 +68,7 @@ func (b *Builder) BuildWorkerPodTemplate(nodeset *slinkyv1beta1.NodeSet, control
 			InitContainers: []corev1.Container{
 				b.logfileContainer(spec.LogFile, slurmdLogFilePath),
 			},
-			Volumes: nodesetVolumes(controller),
+			Volumes: nodesetVolumes(nodeset, controller),
 			Tolerations: []corev1.Toleration{
 				slurmtaints.TolerationWorkerNode,
 			},
@@ -79,7 +79,7 @@ func (b *Builder) BuildWorkerPodTemplate(nodeset *slinkyv1beta1.NodeSet, control
 	return b.buildPodTemplate(opts)
 }
 
-func nodesetVolumes(controller *slinkyv1beta1.Controller) []corev1.Volume {
+func nodesetVolumes(nodeset *slinkyv1beta1.NodeSet, controller *slinkyv1beta1.Controller) []corev1.Volume {
 	out := []corev1.Volume{
 		{
 			Name: slurmEtcVolume,
@@ -103,28 +103,83 @@ func nodesetVolumes(controller *slinkyv1beta1.Controller) []corev1.Volume {
 		},
 		logFileVolume(),
 	}
+
+	// Add SSH host keys volume if SSH is enabled
+	if nodeset.Spec.Ssh.Enabled {
+		out = append(out, corev1.Volume{
+			Name: sshHostKeysVolume,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					DefaultMode: ptr.To[int32](0o600),
+					Sources: []corev1.VolumeProjection{
+						{
+							Secret: &corev1.SecretProjection{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: nodeset.SshHostKeys().Name,
+								},
+								Items: []corev1.KeyToPath{
+									{Key: sshHostRsaKeyFile, Path: sshHostRsaKeyFile, Mode: ptr.To[int32](0o600)},
+									{Key: sshHostRsaPubKeyFile, Path: sshHostRsaPubKeyFile, Mode: ptr.To[int32](0o644)},
+									{Key: sshHostEd25519KeyFile, Path: sshHostEd25519KeyFile, Mode: ptr.To[int32](0o600)},
+									{Key: sshHostEd25519PubKeyFile, Path: sshHostEd25519PubKeyFile, Mode: ptr.To[int32](0o644)},
+									{Key: sshHostEcdsaKeyFile, Path: sshHostEcdsaKeyFile, Mode: ptr.To[int32](0o600)},
+									{Key: sshHostEcdsaPubKeyFile, Path: sshHostEcdsaPubKeyFile, Mode: ptr.To[int32](0o644)},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
 	return out
 }
 
 func (b *Builder) slurmdContainer(nodeset *slinkyv1beta1.NodeSet, controller *slinkyv1beta1.Controller) corev1.Container {
 	merge := nodeset.Spec.Slurmd.Container
 
+	// Base ports always include slurmd
+	ports := []corev1.ContainerPort{
+		{
+			Name:          labels.WorkerApp,
+			ContainerPort: SlurmdPort,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}
+
+	// Add SSH port if enabled
+	if nodeset.Spec.Ssh.Enabled {
+		ports = append(ports, corev1.ContainerPort{
+			Name:          "ssh",
+			ContainerPort: SshPort,
+			Protocol:      corev1.ProtocolTCP,
+		})
+	}
+
+	// Base volume mounts
+	volumeMounts := []corev1.VolumeMount{
+		{Name: slurmEtcVolume, MountPath: slurmEtcDir, ReadOnly: true},
+		{Name: slurmLogFileVolume, MountPath: slurmLogFileDir},
+	}
+
+	// Add SSH host key mounts if enabled
+	if nodeset.Spec.Ssh.Enabled {
+		volumeMounts = append(volumeMounts,
+			corev1.VolumeMount{Name: sshHostKeysVolume, MountPath: sshHostRsaKeyFilePath, SubPath: sshHostRsaKeyFile, ReadOnly: true},
+			corev1.VolumeMount{Name: sshHostKeysVolume, MountPath: sshHostRsaKeyPubFilePath, SubPath: sshHostRsaPubKeyFile, ReadOnly: true},
+			corev1.VolumeMount{Name: sshHostKeysVolume, MountPath: sshHostEd25519KeyFilePath, SubPath: sshHostEd25519KeyFile, ReadOnly: true},
+			corev1.VolumeMount{Name: sshHostKeysVolume, MountPath: sshHostEd25519PubKeyFilePath, SubPath: sshHostEd25519PubKeyFile, ReadOnly: true},
+			corev1.VolumeMount{Name: sshHostKeysVolume, MountPath: sshHostEcdsaKeyFilePath, SubPath: sshHostEcdsaKeyFile, ReadOnly: true},
+			corev1.VolumeMount{Name: sshHostKeysVolume, MountPath: sshHostEcdsaPubKeyFilePath, SubPath: sshHostEcdsaPubKeyFile, ReadOnly: true},
+		)
+	}
+
 	opts := ContainerOpts{
 		base: corev1.Container{
-			Name: labels.WorkerApp,
-			Args: slurmdArgs(nodeset, controller),
-			Ports: []corev1.ContainerPort{
-				{
-					Name:          labels.WorkerApp,
-					ContainerPort: SlurmdPort,
-					Protocol:      corev1.ProtocolTCP,
-				},
-				{
-					Name:          "ssh",
-					ContainerPort: SshPort,
-					Protocol:      corev1.ProtocolTCP,
-				},
-			},
+			Name:  labels.WorkerApp,
+			Args:  slurmdArgs(nodeset, controller),
+			Ports: ports,
 			StartupProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
@@ -175,10 +230,7 @@ func (b *Builder) slurmdContainer(nodeset *slinkyv1beta1.NodeSet, controller *sl
 					},
 				},
 			},
-			VolumeMounts: []corev1.VolumeMount{
-				{Name: slurmEtcVolume, MountPath: slurmEtcDir, ReadOnly: true},
-				{Name: slurmLogFileVolume, MountPath: slurmLogFileDir},
-			},
+			VolumeMounts: volumeMounts,
 		},
 		merge: merge,
 	}

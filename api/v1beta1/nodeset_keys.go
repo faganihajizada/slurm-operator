@@ -23,3 +23,11 @@ func (o *NodeSet) HeadlessServiceKey() types.NamespacedName {
 		Namespace: o.Namespace,
 	}
 }
+
+func (o *NodeSet) SshHostKeys() types.NamespacedName {
+	key := o.Key()
+	return types.NamespacedName{
+		Name:      fmt.Sprintf("%s-ssh-host-keys", key.Name),
+		Namespace: o.Namespace,
+	}
+}

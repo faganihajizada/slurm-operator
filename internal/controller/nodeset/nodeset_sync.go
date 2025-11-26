@@ -231,6 +231,10 @@ func (r *NodeSetReconciler) sync(
 		return err
 	}
 
+	if err := r.syncSshHostKeys(ctx, nodeset); err != nil {
+		return err
+	}
+
 	if err := r.syncSlurmDeadline(ctx, nodeset, pods); err != nil {
 		return err
 	}
@@ -1115,6 +1119,28 @@ func (r *NodeSetReconciler) syncClusterWorkerPDB(
 	// Sync the PodDisruptionBudget for each cluster
 	if err := objectutils.SyncObject(r.Client, ctx, podDisruptionBudget, true); err != nil {
 		return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(podDisruptionBudget), err)
+	}
+
+	return nil
+}
+
+// syncSshHostKeys manages SSH host keys secret for the NodeSet if SSH is enabled
+func (r *NodeSetReconciler) syncSshHostKeys(
+	ctx context.Context,
+	nodeset *slinkyv1beta1.NodeSet,
+) error {
+	// Only create SSH host keys if SSH is enabled
+	if !nodeset.Spec.Ssh.Enabled {
+		return nil
+	}
+
+	secret, err := r.builder.BuildWorkerSshHostKeys(nodeset)
+	if err != nil {
+		return fmt.Errorf("failed to build SSH host keys secret: %w", err)
+	}
+
+	if err := objectutils.SyncObject(r.Client, ctx, secret, true); err != nil {
+		return fmt.Errorf("failed to sync SSH host keys secret (%s): %w", klog.KObj(secret), err)
 	}
 
 	return nil

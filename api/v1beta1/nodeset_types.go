@@ -37,6 +37,10 @@ type NodeSetSpec struct {
 	// +optional
 	Slurmd ContainerWrapper `json:"slurmd,omitempty"`
 
+	// SSH configuration for worker pods.
+	// +optional
+	Ssh NodeSetSsh `json:"ssh,omitzero"`
+
 	// The logfile sidecar configuration.
 	// +optional
 	LogFile ContainerWrapper `json:"logfile,omitzero"`
@@ -110,6 +114,14 @@ type NodeSetPartition struct {
 	// Ref: https://slurm.schedmd.com/slurmd.html#OPT_conf-%3Cnode-parameters%3E
 	// +optional
 	Config string `json:"config,omitzero"`
+}
+
+// NodeSetSsh defines SSH configuration for NodeSet worker pods.
+type NodeSetSsh struct {
+	// Enabled controls whether SSH access is enabled for this NodeSet.
+	// When enabled, SSH host keys will be created and mounted, and port 22 will be exposed.
+	// +default:=false
+	Enabled bool `json:"enabled"`
 }
 
 // NodeSetUpdateStrategy indicates the strategy that the NodeSet

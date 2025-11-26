@@ -51,6 +51,10 @@ spec:
     config: {{ include "slurm.worker.partitionConfig" $nodeset.partition }}
     {{- end }}{{- /* if (include "slurm.worker.partitionConfig" $nodeset.partition) */}}
   {{- end }}{{- /* with $nodeset.partition */}}
+  {{- with $nodeset.ssh }}
+  ssh:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}{{- /* with $nodeset.ssh */}}
   replicas: {{ $nodeset.replicas }}
   slurmd:
     {{- $_ := set $nodeset.slurmd "imagePullPolicy" (default $.Values.imagePullPolicy $nodeset.slurmd.imagePullPolicy) -}}

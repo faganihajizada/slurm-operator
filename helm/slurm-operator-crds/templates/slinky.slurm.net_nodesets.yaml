@@ -173,6 +173,18 @@ spec:
                   Ref: https://github.com/kubernetes/api/blob/master/core/v1/types.go#L2885
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              ssh:
+                description: SSH configuration for worker pods.
+                properties:
+                  enabled:
+                    default: false
+                    description: |-
+                      Enabled controls whether SSH access is enabled for this NodeSet.
+                      When enabled, SSH host keys will be created and mounted, and port 22 will be exposed.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               taintKubeNodes:
                 default: false
                 description: |-
