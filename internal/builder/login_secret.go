@@ -32,12 +32,12 @@ func (b *Builder) BuildLoginSshHostKeys(loginset *slinkyv1beta1.LoginSet) (*core
 		Key:      loginset.SshHostKeys(),
 		Metadata: loginset.Spec.Template.PodMetadata,
 		Data: map[string][]byte{
-			sshHostEcdsaKeyFile:      keyPairRsa.PrivateKey(),
-			sshHostEcdsaPubKeyFile:   keyPairRsa.PublicKey(),
+			sshHostEcdsaKeyFile:      keyPairEcdsa.PrivateKey(),
+			sshHostEcdsaPubKeyFile:   keyPairEcdsa.PublicKey(),
 			sshHostEd25519KeyFile:    keyPairEd25519.PrivateKey(),
 			sshHostEd25519PubKeyFile: keyPairEd25519.PublicKey(),
-			sshHostRsaKeyFile:        keyPairEcdsa.PrivateKey(),
-			sshHostRsaPubKeyFile:     keyPairEcdsa.PublicKey(),
+			sshHostRsaKeyFile:        keyPairRsa.PrivateKey(),
+			sshHostRsaPubKeyFile:     keyPairRsa.PublicKey(),
 		},
 		Immutable: true,
 	}
