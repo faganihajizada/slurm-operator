@@ -37,6 +37,18 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 		return err
 	}
 
+	if token.DeletionTimestamp.IsZero() {
+		now := time.Now()
+		key := objectutils.KeyFunc(token)
+		expirationTime, err := r.getExpTime(ctx, token)
+		if err != nil {
+			durationStore.Push(key, 30*time.Second)
+		} else {
+			refreshTime := expirationTime.Add(-token.Lifetime() * 1 / 5)
+			durationStore.Push(key, refreshTime.Sub(now))
+		}
+	}
+
 	syncSteps := []SyncStep{
 		{
 			Name: "Secret",
@@ -63,9 +75,6 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 				if err != nil {
 					return err
 				}
-
-				key := token.Key().String()
-				durationStore.Push(key, 30*time.Second)
 
 				refreshTime := expirationTime.Add(-token.Lifetime() * 1 / 5)
 				if now.Before(refreshTime) {
