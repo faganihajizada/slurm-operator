@@ -5,6 +5,7 @@ package token
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/controller/token/slurmjwt"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/objectutils"
+	jwt "github.com/golang-jwt/jwt/v5"
 )
 
 type SyncStep struct {
@@ -73,10 +75,20 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 				now := time.Now()
 				expirationTime, err := r.getExpTime(ctx, token)
 				if err != nil {
-					return err
+					if errors.Is(err, jwt.ErrTokenExpired) {
+						logger.Info("Token's JWT is expired")
+					} else {
+						return err
+					}
 				}
 
-				refreshTime := expirationTime.Add(-token.Lifetime() * 1 / 5)
+				refreshTime := now
+				if !expirationTime.IsZero() {
+					refreshTime = expirationTime.Add(-token.Lifetime() * 1 / 5)
+					key := objectutils.KeyFunc(token)
+					durationStore.Push(key, refreshTime.Sub(now))
+				}
+
 				if now.Before(refreshTime) {
 					logger.V(2).Info("token is not near expiration time yet, skipping...", "expirationTime", expirationTime)
 					return nil
