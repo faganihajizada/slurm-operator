@@ -58,29 +58,10 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 					return nil
 				}
 
-				authToken, err := r.refResolver.GetSecretKeyRef(ctx, token.SecretRef(), token.Namespace)
-				if err != nil {
-					return err
-				}
-				jwtHs256Ref := token.JwtHs256Ref()
-				signingKey, err := r.refResolver.GetSecretKeyRef(ctx, &jwtHs256Ref.SecretKeySelector, jwtHs256Ref.Namespace)
-				if err != nil {
-					return err
-				}
-
-				authTokenClaims, err := slurmjwt.ParseTokenClaims(string(authToken), signingKey)
-				if err != nil {
-					logger.V(1).Error(err, "failed to parse Slurm auth token claims")
-				}
-				exp, err := authTokenClaims.GetExpirationTime()
-				if err != nil {
-					logger.V(1).Error(err, "failed to get expiration time")
-				}
-
 				now := time.Now()
-				expirationTime := now
-				if exp != nil {
-					expirationTime = time.Time(exp.Time)
+				expirationTime, err := r.getExpTime(ctx, token)
+				if err != nil {
+					return err
 				}
 
 				key := token.Key().String()
@@ -118,4 +99,33 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 	}
 
 	return r.syncStatus(ctx, token)
+}
+
+func (r *TokenReconciler) getExpTime(ctx context.Context, token *slinkyv1beta1.Token) (time.Time, error) {
+	authToken, err := r.refResolver.GetSecretKeyRef(ctx, token.SecretRef(), token.Namespace)
+	if err != nil {
+		return time.Time{}, err
+	}
+	jwtHs256Ref := token.JwtHs256Ref()
+	signingKey, err := r.refResolver.GetSecretKeyRef(ctx, &jwtHs256Ref.SecretKeySelector, jwtHs256Ref.Namespace)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	authTokenClaims, err := slurmjwt.ParseTokenClaims(string(authToken), signingKey)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse Slurm auth token claims: %w", err)
+	}
+	exp, err := authTokenClaims.GetExpirationTime()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get expiration time: %w", err)
+	}
+
+	now := time.Now()
+	expirationTime := now
+	if exp != nil {
+		expirationTime = time.Time(exp.Time)
+	}
+
+	return expirationTime, nil
 }
