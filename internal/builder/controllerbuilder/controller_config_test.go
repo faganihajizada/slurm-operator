@@ -4,6 +4,7 @@
 package controllerbuilder
 
 import (
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -432,6 +433,230 @@ func TestBuilder_BuildControllerConfigExternal(t *testing.T) {
 			if got.Data[SlurmConfFile] != tt.want.Data[SlurmConfFile] {
 				t.Errorf("got.Data[%s] = %v\nwant.Data[%s] = %v", SlurmConfFile, got.Data[SlurmConfFile], SlurmConfFile, tt.want.Data[SlurmConfFile])
 
+			}
+		})
+	}
+}
+
+func Test_buildNodeSetConf(t *testing.T) {
+	tests := []struct {
+		name        string
+		nodesetList *slinkyv1beta1.NodeSetList
+		want        string
+	}{
+		{
+			name: "empty",
+			nodesetList: &slinkyv1beta1.NodeSetList{
+				Items: []slinkyv1beta1.NodeSet{},
+			},
+			want: "",
+		},
+		{
+			name: "non-empty",
+			nodesetList: &slinkyv1beta1.NodeSetList{
+				Items: []slinkyv1beta1.NodeSet{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: metav1.NamespaceDefault,
+							Name:      "nodeset-0",
+						},
+						Spec: slinkyv1beta1.NodeSetSpec{
+							Partition: slinkyv1beta1.NodeSetPartition{
+								Enabled: false,
+								Config:  "MaxTime=UNLIMITED OverSubscribe=EXCLUSIVE",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: metav1.NamespaceDefault,
+							Name:      "nodeset-1",
+						},
+						Spec: slinkyv1beta1.NodeSetSpec{
+							Partition: slinkyv1beta1.NodeSetPartition{
+								Enabled: true,
+								Config:  "MaxTime=UNLIMITED OverSubscribe=EXCLUSIVE",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: metav1.NamespaceDefault,
+							Name:      "nodeset-2",
+						},
+						Spec: slinkyv1beta1.NodeSetSpec{
+							Partition: slinkyv1beta1.NodeSetPartition{
+								Enabled: true,
+								Config:  "MaxTime=UNLIMITED PreemptMode=REQUEUE",
+							},
+						},
+					},
+				},
+			},
+			want: `#
+### COMPUTE & PARTITION ###
+NodeSet=nodeset-0 Feature=nodeset-0
+NodeSet=nodeset-1 Feature=nodeset-1
+PartitionName=nodeset-1 Nodes=nodeset-1 MaxTime=UNLIMITED OverSubscribe=EXCLUSIVE
+NodeSet=nodeset-2 Feature=nodeset-2
+PartitionName=nodeset-2 Nodes=nodeset-2 MaxTime=UNLIMITED PreemptMode=REQUEUE`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			size := len(tt.nodesetList.Items)
+			for range 5 {
+				idx := rand.Perm(size)
+				randomized := make([]slinkyv1beta1.NodeSet, size)
+				for j := range size {
+					randomized[j] = tt.nodesetList.Items[idx[j]]
+				}
+				got := buildNodeSetConf(tt.nodesetList)
+				if got != tt.want {
+					t.Errorf("buildNodeSetConf() = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func Test_buildPrologEpilogConf(t *testing.T) {
+	tests := []struct {
+		name          string
+		prologScripts []string
+		epilogScripts []string
+		want          string
+	}{
+		{
+			name:          "empty",
+			prologScripts: []string{},
+			epilogScripts: []string{},
+			want:          "",
+		},
+		{
+			name:          "prolog",
+			prologScripts: []string{"prolog-0.sh", "prolog-1.sh", "prolog-2.sh"},
+			epilogScripts: []string{},
+			want: `#
+### PROLOG & EPILOG ###
+Prolog=prolog-0.sh
+Prolog=prolog-1.sh
+Prolog=prolog-2.sh`,
+		},
+		{
+			name:          "epilog",
+			prologScripts: []string{},
+			epilogScripts: []string{"epilog-0.sh", "epilog-1.sh", "epilog-2.sh"},
+			want: `#
+### PROLOG & EPILOG ###
+Epilog=epilog-0.sh
+Epilog=epilog-1.sh
+Epilog=epilog-2.sh`,
+		},
+		{
+			name:          "both",
+			prologScripts: []string{"prolog-0.sh", "prolog-1.sh", "prolog-2.sh"},
+			epilogScripts: []string{"epilog-0.sh", "epilog-1.sh", "epilog-2.sh"},
+			want: `#
+### PROLOG & EPILOG ###
+Prolog=prolog-0.sh
+Prolog=prolog-1.sh
+Prolog=prolog-2.sh
+Epilog=epilog-0.sh
+Epilog=epilog-1.sh
+Epilog=epilog-2.sh`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prologScriptsSize := len(tt.prologScripts)
+			epilogScriptsSize := len(tt.epilogScripts)
+			for range 5 {
+				idx := rand.Perm(prologScriptsSize)
+				randomizedPrologScripts := make([]string, prologScriptsSize)
+				for i := range prologScriptsSize {
+					randomizedPrologScripts[i] = tt.prologScripts[idx[i]]
+				}
+				jdx := rand.Perm(epilogScriptsSize)
+				randomizedEpilogScripts := make([]string, epilogScriptsSize)
+				for j := range epilogScriptsSize {
+					randomizedEpilogScripts[j] = tt.epilogScripts[jdx[j]]
+				}
+				got := buildPrologEpilogConf(tt.prologScripts, tt.epilogScripts)
+				if got != tt.want {
+					t.Errorf("buildPrologEpilogConf() = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func Test_buildPrologEpilogSlurmctldConf(t *testing.T) {
+	tests := []struct {
+		name                   string
+		prologSlurmctldScripts []string
+		epilogSlurmctldScripts []string
+		want                   string
+	}{
+		{
+			name:                   "empty",
+			prologSlurmctldScripts: []string{},
+			epilogSlurmctldScripts: []string{},
+			want:                   "",
+		},
+		{
+			name:                   "prolog",
+			prologSlurmctldScripts: []string{"prolog-slurmctld-0.sh", "prolog-slurmctld-1.sh", "prolog-slurmctld-2.sh"},
+			epilogSlurmctldScripts: []string{},
+			want: `#
+### SLURMCTLD PROLOG & EPILOG ###
+PrologSlurmctld=/etc/slurm/prolog-slurmctld-0.sh
+PrologSlurmctld=/etc/slurm/prolog-slurmctld-1.sh
+PrologSlurmctld=/etc/slurm/prolog-slurmctld-2.sh`,
+		},
+		{
+			name:                   "epilog",
+			prologSlurmctldScripts: []string{},
+			epilogSlurmctldScripts: []string{"epilog-slurmctld-0.sh", "epilog-slurmctld-1.sh", "epilog-slurmctld-2.sh"},
+			want: `#
+### SLURMCTLD PROLOG & EPILOG ###
+EpilogSlurmctld=/etc/slurm/epilog-slurmctld-0.sh
+EpilogSlurmctld=/etc/slurm/epilog-slurmctld-1.sh
+EpilogSlurmctld=/etc/slurm/epilog-slurmctld-2.sh`,
+		},
+		{
+			name:                   "both",
+			prologSlurmctldScripts: []string{"prolog-slurmctld-0.sh", "prolog-slurmctld-1.sh", "prolog-slurmctld-2.sh"},
+			epilogSlurmctldScripts: []string{"epilog-slurmctld-0.sh", "epilog-slurmctld-1.sh", "epilog-slurmctld-2.sh"},
+			want: `#
+### SLURMCTLD PROLOG & EPILOG ###
+PrologSlurmctld=/etc/slurm/prolog-slurmctld-0.sh
+PrologSlurmctld=/etc/slurm/prolog-slurmctld-1.sh
+PrologSlurmctld=/etc/slurm/prolog-slurmctld-2.sh
+EpilogSlurmctld=/etc/slurm/epilog-slurmctld-0.sh
+EpilogSlurmctld=/etc/slurm/epilog-slurmctld-1.sh
+EpilogSlurmctld=/etc/slurm/epilog-slurmctld-2.sh`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prologSlurmctldScriptsSize := len(tt.prologSlurmctldScripts)
+			epilogSlurmctldScriptsSize := len(tt.epilogSlurmctldScripts)
+			for range 5 {
+				idx := rand.Perm(prologSlurmctldScriptsSize)
+				randomizedPrologSlurmctldScripts := make([]string, prologSlurmctldScriptsSize)
+				for i := range prologSlurmctldScriptsSize {
+					randomizedPrologSlurmctldScripts[i] = tt.prologSlurmctldScripts[idx[i]]
+				}
+				jdx := rand.Perm(epilogSlurmctldScriptsSize)
+				randomizedEpilogSlurmctldScripts := make([]string, epilogSlurmctldScriptsSize)
+				for i := range epilogSlurmctldScriptsSize {
+					randomizedEpilogSlurmctldScripts[i] = tt.epilogSlurmctldScripts[jdx[i]]
+				}
+				got := buildPrologEpilogSlurmctldConf(tt.prologSlurmctldScripts, tt.epilogSlurmctldScripts)
+				if got != tt.want {
+					t.Errorf("buildPrologEpilogSlurmctldConf() = %v, want %v", got, tt.want)
+				}
 			}
 		})
 	}

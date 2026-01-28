@@ -86,7 +86,6 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 		sort.Strings(filenames)
 		prologScripts = append(prologScripts, filenames...)
 	}
-	sort.Strings(prologScripts)
 
 	epilogScripts := []string{}
 	for _, ref := range controller.Spec.EpilogScriptRefs {
@@ -102,7 +101,6 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 		sort.Strings(filenames)
 		epilogScripts = append(epilogScripts, filenames...)
 	}
-	sort.Strings(epilogScripts)
 
 	prologSlurmctldScripts := []string{}
 	for _, ref := range controller.Spec.PrologSlurmctldScriptRefs {
@@ -118,7 +116,6 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 		sort.Strings(filenames)
 		prologSlurmctldScripts = append(prologSlurmctldScripts, filenames...)
 	}
-	sort.Strings(prologSlurmctldScripts)
 
 	epilogSlurmctldScripts := []string{}
 	for _, ref := range controller.Spec.EpilogSlurmctldScriptRefs {
@@ -134,7 +131,6 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 		sort.Strings(filenames)
 		epilogSlurmctldScripts = append(epilogSlurmctldScripts, filenames...)
 	}
-	sort.Strings(epilogSlurmctldScripts)
 
 	opts := common.ConfigMapOpts{
 		Key: controller.ConfigKey(),
@@ -234,6 +230,36 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewProperty("JobAcctGatherType", "jobacct_gather/none"))
 	}
 
+	if snippet := buildPrologEpilogSlurmctldConf(prologSlurmctldScripts, epilogSlurmctldScripts); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw(snippet))
+	}
+
+	if snippet := buildPrologEpilogConf(prologScripts, epilogScripts); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw(snippet))
+	}
+
+	if snippet := buildNodeSetConf(nodesetList); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw(snippet))
+	}
+
+	extraConf := controller.Spec.ExtraConf
+	conf.AddProperty(config.NewPropertyRaw("#"))
+	conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
+	conf.AddProperty(config.NewPropertyRaw(extraConf))
+
+	return conf.Build()
+}
+
+// buildPrologEpilogConf() returns a slurm.conf snippet containing PrologSlurmctld and EpilogSlurmctld config.
+//
+// https://slurm.schedmd.com/slurm.conf.html#OPT_PrologSlurmctld
+// https://slurm.schedmd.com/slurm.conf.html#OPT_EpilogSlurmctld
+// https://slurm.schedmd.com/slurm.conf.html#SECTION_PROLOG-AND-EPILOG-SCRIPTS
+func buildPrologEpilogSlurmctldConf(prologSlurmctldScripts, epilogSlurmctldScripts []string) string {
+	conf := config.NewBuilder()
+
+	sort.Strings(prologSlurmctldScripts)
+	sort.Strings(epilogSlurmctldScripts)
 	if len(prologSlurmctldScripts) > 0 || len(epilogSlurmctldScripts) > 0 {
 		conf.AddProperty(config.NewPropertyRaw("#"))
 		conf.AddProperty(config.NewPropertyRaw("### SLURMCTLD PROLOG & EPILOG ###"))
@@ -247,6 +273,19 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewProperty("EpilogSlurmctld", scriptPath))
 	}
 
+	return conf.WithFinalNewline(false).Build()
+}
+
+// buildPrologEpilogConf() returns a slurm.conf snippet containing Prolog and Epilog config.
+//
+// https://slurm.schedmd.com/slurm.conf.html#OPT_Prolog
+// https://slurm.schedmd.com/slurm.conf.html#OPT_Epilog
+// https://slurm.schedmd.com/slurm.conf.html#SECTION_PROLOG-AND-EPILOG-SCRIPTS
+func buildPrologEpilogConf(prologScripts, epilogScripts []string) string {
+	conf := config.NewBuilder()
+
+	sort.Strings(prologScripts)
+	sort.Strings(epilogScripts)
 	if len(prologScripts) > 0 || len(epilogScripts) > 0 {
 		conf.AddProperty(config.NewPropertyRaw("#"))
 		conf.AddProperty(config.NewPropertyRaw("### PROLOG & EPILOG ###"))
@@ -258,6 +297,19 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewProperty("Epilog", filename))
 	}
 
+	return conf.WithFinalNewline(false).Build()
+}
+
+// buildNodeSetConf() returns a slurm.conf snippet containing NodeSets and their Partitions.
+//
+// https://slurm.schedmd.com/slurm.conf.html#SECTION_NODESET-CONFIGURATION
+// https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION
+func buildNodeSetConf(nodesetList *slinkyv1beta1.NodeSetList) string {
+	conf := config.NewBuilder()
+
+	sort.Slice(nodesetList.Items, func(i, j int) bool {
+		return nodesetList.Items[i].Name < nodesetList.Items[j].Name
+	})
 	if len(nodesetList.Items) > 0 {
 		conf.AddProperty(config.NewPropertyRaw("#"))
 		conf.AddProperty(config.NewPropertyRaw("### COMPUTE & PARTITION ###"))
@@ -287,12 +339,7 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewPropertyRaw(partitionLineRendered))
 	}
 
-	extraConf := controller.Spec.ExtraConf
-	conf.AddProperty(config.NewPropertyRaw("#"))
-	conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
-	conf.AddProperty(config.NewPropertyRaw(extraConf))
-
-	return conf.Build()
+	return conf.WithFinalNewline(false).Build()
 }
 
 // https://slurm.schedmd.com/cgroup.conf.html
