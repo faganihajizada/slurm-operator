@@ -102,6 +102,12 @@ func TestBuilder_BuildWorkerPodTemplate(t *testing.T) {
 
 			case len(got.Spec.DNSConfig.Searches) == 0:
 				t.Errorf("len(DNSConfig.Searches) = %v , want = > 0", len(got.Spec.DNSConfig.Searches))
+
+			case got.Spec.Containers[0].LivenessProbe == nil ||
+				got.Spec.Containers[0].LivenessProbe.Exec == nil ||
+				got.Spec.Containers[0].LivenessProbe.Exec.Command[0] != "/usr/local/bin/slurmd-liveness.sh":
+				t.Errorf("Containers[0].LivenessProbe.Exec.Command = %v, want = [/usr/local/bin/slurmd-liveness.sh]",
+					got.Spec.Containers[0].LivenessProbe)
 			}
 		})
 	}

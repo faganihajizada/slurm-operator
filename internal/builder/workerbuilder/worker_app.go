@@ -219,9 +219,8 @@ func (b *WorkerBuilder) slurmdContainer(nodeset *slinkyv1beta1.NodeSet, controll
 			},
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Path: "/livez",
-						Port: intstr.FromString(labels.WorkerApp),
+					Exec: &corev1.ExecAction{
+						Command: []string{"/usr/local/bin/slurmd-liveness.sh"},
 					},
 				},
 				FailureThreshold: 6,
