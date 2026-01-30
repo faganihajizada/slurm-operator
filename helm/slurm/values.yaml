@@ -630,6 +630,8 @@ nodesets:
     taintKubeNodes: false
     # -- Enable propagation of container `resources.limits` into slurmd.
     useResourceLimits: true
+    # -- How many places to pad with zeroes when constructing the pod ordinal.
+    ordinalPadding: 0
     # slurmd container configurations.
     slurmd:
       # -- The image to use, `${repository}:${tag}`.
