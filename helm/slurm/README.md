@@ -115,7 +115,6 @@ Kubernetes: `>= 1.29.0-0`
 | loginsets.slinky.service | object | `{"metadata":{},"spec":{"type":"LoadBalancer"}}` | The service configuration. |
 | loginsets.slinky.service.metadata | object | `{}` | Labels and annotations. Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/ |
 | loginsets.slinky.service.spec | corev1.ServiceSpec | `{"type":"LoadBalancer"}` | Extend the service template, and/or override certain configurations. Ref: https://kubernetes.io/docs/concepts/services-networking/service/ |
-| loginsets.slinky.workloadDisruptionProtection | bool | `true` | Use a Pod Disruption Budget to protect pods in this NodeSet when Slurm jobs are running on them Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/ |
 | nameOverride | string | `nil` | Overrides the name of the release. |
 | namespaceOverride | string | `nil` | Overrides the namespace of the release. |
 | nodesets.slinky.enabled | bool | `true` | Enable use of this NodeSet. |
@@ -147,6 +146,7 @@ Kubernetes: `>= 1.29.0-0`
 | nodesets.slinky.updateStrategy.rollingUpdate.maxUnavailable | string | `"25%"` | Maximum number of pods that can be unavailable during update. Can be an absolute number (ex: 5) or a percentage (ex: 25%). |
 | nodesets.slinky.updateStrategy.type | string | `"RollingUpdate"` | The strategy type. Can be one of: RollingUpdate; OnDelete. |
 | nodesets.slinky.useResourceLimits | bool | `true` | Enable propagation of container `resources.limits` into slurmd. |
+| nodesets.slinky.workloadDisruptionProtection | bool | `true` | Use a Pod Disruption Budget to protect pods in this NodeSet when Slurm jobs are running on them Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/ |
 | partitions | map[string]object | `{"all":{"config":null,"configMap":{"Default":"YES","MaxTime":"UNLIMITED","State":"UP"},"enabled":true,"nodesets":["ALL"]}}` | Slurm partition configurations. The map key represents the partition name (must be unique); the map value represents the partition definition. |
 | partitions.all.config | string | `nil` | Raw Slurm partition configuration options added to the partition line. Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION |
 | partitions.all.configMap | map[string]string \| map[string][]string | `{"Default":"YES","MaxTime":"UNLIMITED","State":"UP"}` | The Slurm partition configuration options added to the partition line. If `config` is not empty, it takes precedence. Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION |
