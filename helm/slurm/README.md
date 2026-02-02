@@ -124,6 +124,7 @@ Kubernetes: `>= 1.29.0-0`
 | nodesets.slinky.logfile.image | object | `{"repository":"docker.io/library/alpine","tag":"latest"}` | The image to use, `${repository}:${tag}`. Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names |
 | nodesets.slinky.logfile.resources | object | `{}` | The container resource limits and requests. Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container |
 | nodesets.slinky.metadata | object | `{}` | Labels and annotations. Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/ |
+| nodesets.slinky.ordinalPadding | int | `0` | How many places to pad with zeroes when constructing the pod ordinal. |
 | nodesets.slinky.partition.config | string | `nil` | Raw Slurm partition configuration options added to the partition line added to the partition line. Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION |
 | nodesets.slinky.partition.configMap | map[string]string \| map[string][]string | `{}` | The Slurm partition configuration options added to the partition line. If `config` is not empty, it takes precedence. Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION |
 | nodesets.slinky.partition.enabled | bool | `true` | Enable NodeSet partition creation. |

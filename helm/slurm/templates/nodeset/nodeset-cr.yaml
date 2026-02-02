@@ -71,6 +71,7 @@ spec:
   updateStrategy:
     {{- toYaml . | nindent 4 }}
   {{- end }}{{- /* with $nodeset.updateStrategy */}}
+  ordinalPadding: {{ $nodeset.ordinalPadding }}
   taintKubeNodes: {{ $nodeset.taintKubeNodes }}
   workloadDisruptionProtection: {{ $nodeset.workloadDisruptionProtection | default true }}
 {{- end }}{{- /* $nodeset.enabled */}}
