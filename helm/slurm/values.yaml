@@ -146,7 +146,7 @@ controller:
     port: null
   # slurmctld container configurations.
   slurmctld:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmctld
@@ -163,7 +163,7 @@ controller:
       #   memory: 1Gi
   # Reconfigure container configurations.
   reconfigure:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmctld
@@ -176,7 +176,7 @@ controller:
       #   memory: 128Mi
   # LogFile sidecar configurations.
   logfile:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: docker.io/library/alpine
@@ -301,7 +301,7 @@ restapi:
   replicas: 1
   # slurmrestd container configurations.
   slurmrestd:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmrestd
@@ -383,7 +383,7 @@ accounting:
     port: null
   # slurmdbd container configurations.
   slurmdbd:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmdbd
@@ -518,7 +518,7 @@ loginsets:
     replicas: 1
     # login container configurations.
     login:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: ghcr.io/slinkyproject/login
@@ -547,7 +547,7 @@ loginsets:
         #   mountPath: /home
     # InitConf container configurations.
     initconf:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: docker.io/library/alpine
@@ -634,7 +634,7 @@ nodesets:
     ordinalPadding: 0
     # slurmd container configurations.
     slurmd:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: ghcr.io/slinkyproject/slurmd
@@ -660,7 +660,7 @@ nodesets:
         #   mountPath: /home
     # LogFile sidecar configurations.
     logfile:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: docker.io/library/alpine
