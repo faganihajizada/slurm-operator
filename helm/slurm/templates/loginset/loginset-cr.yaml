@@ -37,7 +37,9 @@ spec:
   rootSshAuthorizedKeys: |
     {{- . | nindent 4 }}
   {{- end }}{{- /* with $loginset.rootSshAuthorizedKeys */}}
+  {{ if $loginset.replicas }}
   replicas: {{ $loginset.replicas }}
+  {{- end }}{{- /* if $loginset.replicas */}}
   login:
     {{- $_ := set $loginset.login "imagePullPolicy" (get $loginset.login "imagePullPolicy" | default $.Values.imagePullPolicy ) -}}
     {{- include "format-container" $loginset.login | nindent 4 }}

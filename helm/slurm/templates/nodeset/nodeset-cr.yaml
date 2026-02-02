@@ -47,7 +47,7 @@ spec:
   {{- end -}}{{- /* if (include "slurm.worker.extraConf" $nodeset) */}}
   {{- with $nodeset.partition }}
   partition:
-    enabled: {{ $nodeset.partition.enabled | default false }}
+    enabled: {{ $nodeset.partition.enabled }}
     {{- if (include "slurm.worker.partitionConfig" $nodeset.partition) }}
     config: {{ include "slurm.worker.partitionConfig" $nodeset.partition }}
     {{- end }}{{- /* if (include "slurm.worker.partitionConfig" $nodeset.partition) */}}
@@ -59,7 +59,9 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}{{- /* with $nodeset.ssh */}}
   {{- end }}{{- /* if $nodeset.ssh.enabled */}}
+  {{- if $nodeset.replicas }}
   replicas: {{ $nodeset.replicas }}
+  {{- end }}{{- /* if $nodeset.replicas */}}
   slurmd:
     {{- $_ := set $nodeset.slurmd "imagePullPolicy" (get $nodeset.slurmd "imagePullPolicy" | default $.Values.imagePullPolicy ) -}}
     {{- include "format-container" $nodeset.slurmd | nindent 4 }}
@@ -71,8 +73,14 @@ spec:
   updateStrategy:
     {{- toYaml . | nindent 4 }}
   {{- end }}{{- /* with $nodeset.updateStrategy */}}
+  {{- if $nodeset.ordinalPadding }}
   ordinalPadding: {{ $nodeset.ordinalPadding }}
+  {{- end }}{{- /* if $nodeset.ordinalPadding */}}
+  {{- if $nodeset.taintKubeNodes }}
   taintKubeNodes: {{ $nodeset.taintKubeNodes }}
-  workloadDisruptionProtection: {{ $nodeset.workloadDisruptionProtection | default true }}
+  {{- end }}{{- /* if $nodeset.taintKubeNodes */}}
+  {{- if $nodeset.workloadDisruptionProtection }}
+  workloadDisruptionProtection: {{ $nodeset.workloadDisruptionProtection }}
+  {{- end }}{{- /* if $nodeset.workloadDisruptionProtection */}}
 {{- end }}{{- /* $nodeset.enabled */}}
 {{- end }}{{- /* range $nodeset := $.Values.nodesets */}}
