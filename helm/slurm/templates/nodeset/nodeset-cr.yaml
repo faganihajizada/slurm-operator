@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 {{- range $key, $nodeset := $.Values.nodesets -}}
 {{- if $nodeset.enabled }}
 {{- $name := printf "%s-%s" (include "slurm.worker.name" $) $key }}
-{{- $metadata := merge dict $nodeset.metadata (dict "labels" (fromYaml (include "slurm.labels" $))) -}}
+{{- $metadata := merge dict ($nodeset.metadata | default dict) (dict "labels" (fromYaml (include "slurm.labels" $))) -}}
 {{- $podSpec := $nodeset.podSpec | default dict -}}
 {{- $imagePullSecrets := concat list ($podSpec.imagePullSecrets | default list) ($.Values.imagePullSecrets | default list) -}}
 {{- $_ := set $podSpec "imagePullSecrets" $imagePullSecrets -}}
@@ -52,13 +52,13 @@ spec:
     config: {{ include "slurm.worker.partitionConfig" $nodeset.partition }}
     {{- end }}{{- /* if (include "slurm.worker.partitionConfig" $nodeset.partition) */}}
   {{- end }}{{- /* with $nodeset.partition */}}
+  {{- with $nodeset.ssh }}
   {{- if $nodeset.ssh.enabled }}
   {{- $_ := set $nodeset.ssh "sssdConfRef" (dict "name" (include "slurm.sssdConf.name" $) "key" (include "slurm.sssdConf.key" $)) }}
-  {{- with $nodeset.ssh }}
   ssh:
     {{- toYaml . | nindent 4 }}
-  {{- end }}{{- /* with $nodeset.ssh */}}
   {{- end }}{{- /* if $nodeset.ssh.enabled */}}
+  {{- end }}{{- /* with $nodeset.ssh */}}
   {{- if $nodeset.replicas }}
   replicas: {{ $nodeset.replicas }}
   {{- end }}{{- /* if $nodeset.replicas */}}
