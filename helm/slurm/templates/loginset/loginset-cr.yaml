@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: Copyright (C) SchedMD LLC.
 SPDX-License-Identifier: Apache-2.0
 */}}
 
-{{- range $key, $loginset := $.Values.loginsets -}}
+{{- range $key, $loginset := $.Values.loginsets }}
 {{- if $loginset.enabled }}
 {{- $name := printf "%s-%s" (include "slurm.login.name" $) $key }}
 {{- $metadata := merge dict ($loginset.metadata | default dict) (dict "labels" (fromYaml (include "slurm.labels" $))) -}}
