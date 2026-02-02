@@ -74,8 +74,8 @@ build-images: ## Build container images.
 	REGISTRY=$(REGISTRY) VERSION=$(VERSION) $(CONTAINER_TOOL) buildx bake --builder=$(BUILDER)
 
 .PHONY: build-chart
-build-chart: ## Build charts.
-	$(foreach chart, $(wildcard ./helm/**/Chart.yaml), helm package --dependency-update helm/$(shell basename "$(shell dirname "${chart}")") ;)
+build-chart: helm-bin ## Build charts.
+	$(foreach chart, $(wildcard ./helm/**/Chart.yaml), $(HELM) package --dependency-update helm/$(shell basename "$(shell dirname "${chart}")") ;)
 
 .PHONY: push
 push: push-images push-charts ## Push OCI packages.
@@ -86,12 +86,12 @@ push-images: build-images ## Push container images.
 
 .PHONY: push-charts
 push-charts: build-chart ## Push OCI packages.
-	$(foreach chart, $(wildcard ./*.tgz), helm push ${chart} oci://$(REGISTRY)/charts ;)
+	$(foreach chart, $(wildcard ./*.tgz), $(HELM) push ${chart} oci://$(REGISTRY)/charts ;)
 
 .PHONY: clean
 clean: ## Clean executable files.
-	@ chmod -R -f u+w bin/ || true # make test installs files without write permissions.
-	rm -rf bin/
+	- chmod -R -f u+w "$(LOCALBIN)" # make test installs files without write permissions.
+	rm -rf "$(LOCALBIN)"
 	rm -rf vendor/
 	rm -f cover.out cover.html
 	rm -f *.tgz
@@ -133,6 +133,12 @@ GOVULNCHECK ?= $(LOCALBIN)/govulncheck-$(GOVULNCHECK_VERSION)
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint-$(GOLANGCI_LINT_VERSION)
 HELM_DOCS ?= $(LOCALBIN)/helm-docs-$(HELM_DOCS_VERSION)
 PANDOC ?= $(LOCALBIN)/pandoc-$(PANDOC_VERSION)
+HELM ?= $(LOCALBIN)/helm
+HELM_CONFIG_HOME ?= $(LOCALBIN)/helm-config
+HELM_CACHE_HOME ?= $(LOCALBIN)/helm-cache
+HELM_DATA_HOME ?= $(LOCALBIN)/helm-data
+HELM_PLUGINS ?= $(LOCALBIN)/helm-plugins
+export HELM_CONFIG_HOME HELM_CACHE_HOME HELM_DATA_HOME HELM_PLUGINS
 
 ## Tool Versions
 CONTROLLER_TOOLS_VERSION ?= v0.18.0
@@ -144,6 +150,7 @@ GOVULNCHECK_VERSION ?= latest
 GOLANGCI_LINT_VERSION ?= v2.6.0
 HELM_DOCS_VERSION ?= v1.14.2
 PANDOC_VERSION ?= 3.7.0.2
+HELM_VERSION ?= v4.1.0
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
@@ -172,6 +179,18 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 helm-docs-bin: $(HELM_DOCS) ## Download helm-docs locally if necessary.
 $(HELM_DOCS): $(LOCALBIN)
 	$(call go-install-tool,$(HELM_DOCS),github.com/norwoodj/helm-docs/cmd/helm-docs,$(HELM_DOCS_VERSION))
+
+.PHONY: helm-bin
+helm-bin: $(HELM) ## Download Helm v4 locally if necessary.
+$(HELM): $(LOCALBIN)
+	@if ! [ -f "$(HELM)" ]; then \
+		tmpdir="$$(mktemp -d)" ;\
+		archive="helm-$(HELM_VERSION)-$$(go env GOOS)-$$(go env GOARCH).tar.gz" ;\
+		curl -sSLo "$${tmpdir}/$${archive}" "https://get.helm.sh/$${archive}" ;\
+		tar -xzf "$${tmpdir}/$${archive}" -C "$${tmpdir}" ;\
+		cp "$${tmpdir}/$$(go env GOOS)-$$(go env GOARCH)/helm" "$(HELM)" ;\
+		rm -rf "$${tmpdir}" ;\
+	fi
 
 .PHONY: pandoc-bin
 pandoc-bin: $(PANDOC) ## Download pandoc locally if necessary.
@@ -221,12 +240,28 @@ helm-docs: helm-docs-bin ## Run helm-docs.
 	$(HELM_DOCS) --chart-search-root=helm
 
 .PHONY: helm-lint
-helm-lint: ## Lint Helm charts.
-	find "helm/" -depth -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0r -n1 helm lint --strict
+helm-lint: helm-bin ## Lint Helm charts.
+	find "helm/" -depth -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0r -n1 $(HELM) lint --strict
+
+.PHONY: helm-unittest
+helm-unittest: helm-unittest-bin ## Run helm-unittest.
+	find "helm/" -depth -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0r -n1 $(HELM) unittest --strict
+
+.PHONY: helm-unittest-update
+helm-unittest-update: helm-unittest-bin ## Update helm-unittest snapshots.
+	find "helm/" -depth -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0r -n1 $(HELM) unittest --strict --update-snapshot
+
+.PHONY: helm-unittest-bin
+helm-unittest-bin: helm-bin ## Download helm-unittest plugin locally if necessary.
+	@mkdir -p "$(HELM_CONFIG_HOME)" "$(HELM_CACHE_HOME)" "$(HELM_DATA_HOME)" "$(HELM_PLUGINS)"
+	@if ! $(HELM) plugin list | grep -q "unittest"; then \
+		$(HELM) plugin install https://github.com/helm-unittest/helm-unittest --verify=false ;\
+	fi
+
 
 .PHONY: helm-dependency-update
-helm-dependency-update: ## Update Helm chart dependencies.
-	find "helm/" -depth -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0r -n1 helm dependency update
+helm-dependency-update: helm-bin ## Update Helm chart dependencies.
+	find "helm/" -depth -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0r -n1 $(HELM) dependency update
 
 .PHONY: values-dev
 values-dev: ## Safely initialize values-dev.yaml files for Helm charts.
