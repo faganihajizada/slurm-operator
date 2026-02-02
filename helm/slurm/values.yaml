@@ -508,7 +508,7 @@ sssd:
     ldap_user_search_base = ou=Users,dc=example,dc=com
     ldap_group_search_base = ou=Groups,dc=example,dc=com
 
-# Slurm LoginSet (sackd, sshd, sssd) configurations.
+# (map[string]object) Slurm LoginSet (sackd, sshd, sssd) configurations.
 loginsets:
   # Sample LoginSet.
   slinky:
@@ -618,7 +618,7 @@ loginsets:
       # port: 22
       # nodePort: 32222
 
-# Slurm NodeSet (slurmd) configurations.
+# (map[string]object) Slurm NodeSet (slurmd) configurations.
 nodesets:
   # Sample NodeSet.
   slinky:
