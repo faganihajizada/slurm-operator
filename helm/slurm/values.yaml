@@ -146,7 +146,7 @@ controller:
     port: null
   # slurmctld container configurations.
   slurmctld:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmctld
@@ -163,7 +163,7 @@ controller:
       #   memory: 1Gi
   # Reconfigure container configurations.
   reconfigure:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmctld
@@ -176,7 +176,7 @@ controller:
       #   memory: 128Mi
   # LogFile sidecar configurations.
   logfile:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: docker.io/library/alpine
@@ -301,7 +301,7 @@ restapi:
   replicas: 1
   # slurmrestd container configurations.
   slurmrestd:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmrestd
@@ -383,7 +383,7 @@ accounting:
     port: null
   # slurmdbd container configurations.
   slurmdbd:
-    # -- The image to use, `${repository}:${tag}`.
+    # -- (string|object) The image to use.
     # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
     image:
       repository: ghcr.io/slinkyproject/slurmdbd
@@ -508,7 +508,7 @@ sssd:
     ldap_user_search_base = ou=Users,dc=example,dc=com
     ldap_group_search_base = ou=Groups,dc=example,dc=com
 
-# Slurm LoginSet (sackd, sshd, sssd) configurations.
+# (map[string]object) Slurm LoginSet (sackd, sshd, sssd) configurations.
 loginsets:
   # Sample LoginSet.
   slinky:
@@ -518,7 +518,7 @@ loginsets:
     replicas: 1
     # login container configurations.
     login:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: ghcr.io/slinkyproject/login
@@ -547,7 +547,7 @@ loginsets:
         #   mountPath: /home
     # InitConf container configurations.
     initconf:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: docker.io/library/alpine
@@ -568,9 +568,6 @@ loginsets:
     metadata: {}
       # annotations: {}
       # labels: {}
-    # -- Use a Pod Disruption Budget to protect pods in this NodeSet when Slurm jobs are running on them
-    # Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
-    workloadDisruptionProtection: true
     # -- (corev1.PodSpec) Extend the pod template, and/or override certain configurations.
     # Ref: https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates
     podSpec:
@@ -618,7 +615,7 @@ loginsets:
       # port: 22
       # nodePort: 32222
 
-# Slurm NodeSet (slurmd) configurations.
+# (map[string]object) Slurm NodeSet (slurmd) configurations.
 nodesets:
   # Sample NodeSet.
   slinky:
@@ -628,13 +625,16 @@ nodesets:
     replicas: 1
     # -- Taint the Kubernetes nodes on which nodeset pods are scheduled with NoExecute.
     taintKubeNodes: false
+    # -- Use a Pod Disruption Budget to protect pods in this NodeSet when Slurm jobs are running on them
+    # Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+    workloadDisruptionProtection: true
     # -- Enable propagation of container `resources.limits` into slurmd.
     useResourceLimits: true
     # -- How many places to pad with zeroes when constructing the pod ordinal.
     ordinalPadding: 0
     # slurmd container configurations.
     slurmd:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: ghcr.io/slinkyproject/slurmd
@@ -660,7 +660,7 @@ nodesets:
         #   mountPath: /home
     # LogFile sidecar configurations.
     logfile:
-      # -- The image to use, `${repository}:${tag}`.
+      # -- (string|object) The image to use.
       # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
       image:
         repository: docker.io/library/alpine
