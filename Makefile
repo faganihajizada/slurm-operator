@@ -124,6 +124,40 @@ mv "$$(echo "$(1)" | $(SED) "s/-$(3)$$//")" $(1) ;\
 }
 endef
 
+# helm-install-plugin will 'helm plugin install' if missing or wrong version
+# $1 - plugin name
+# $2 - plugin urlgo
+# $3 - plugin version (optional)
+# verify_flag - added in the event that we are helm v4 or older due to https://helm.sh/docs/helm/helm_plugin_verify
+#   being updated to be more secure, but libraries currently do not support it.
+define helm-install-plugin
+@{ \
+set -e; \
+if [ ! -x "$(HELM)" ]; then \
+	echo "Helm binary not found at $(HELM). Run 'make helm-bin' first." ;\
+	exit 1 ;\
+fi ;\
+helm_major="$$( $(HELM) version --short 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' )"; \
+if [ "$${helm_major}" = "4" ]; then \
+	verify_flag="--verify=false" ;\
+else \
+	verify_flag="" ;\
+fi ;\
+installed_version="$$( $(HELM) plugin list 2>/dev/null | awk '$$1=="$(1)" {print $$2}' )"; \
+if [ -n "$${installed_version}" ]; then \
+	if [ -n "$(3)" ] && [ "$${installed_version}" != "$(3)" ]; then \
+		$(HELM) plugin install "$(2)" --version "$(3)" $${verify_flag} ;\
+	fi ;\
+else \
+	if [ -n "$(3)" ]; then \
+		$(HELM) plugin install "$(2)" --version "$(3)" $${verify_flag} ;\
+	else \
+		$(HELM) plugin install "$(2)" $${verify_flag} ;\
+	fi ;\
+fi ;\
+}
+endef
+
 ## Tool Binaries
 KUBECTL ?= kubectl
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen-$(CONTROLLER_TOOLS_VERSION)
@@ -151,6 +185,7 @@ GOLANGCI_LINT_VERSION ?= v2.6.0
 HELM_DOCS_VERSION ?= v1.14.2
 PANDOC_VERSION ?= 3.7.0.2
 HELM_VERSION ?= v4.1.0
+HELM_UNITTEST_VERSION ?= v1.0.3
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
@@ -254,9 +289,7 @@ helm-unittest-update: helm-unittest-bin ## Update helm-unittest snapshots.
 .PHONY: helm-unittest-bin
 helm-unittest-bin: helm-bin ## Download helm-unittest plugin locally if necessary.
 	@mkdir -p "$(HELM_CONFIG_HOME)" "$(HELM_CACHE_HOME)" "$(HELM_DATA_HOME)" "$(HELM_PLUGINS)"
-	@if ! $(HELM) plugin list | grep -q "unittest"; then \
-		$(HELM) plugin install https://github.com/helm-unittest/helm-unittest --verify=false ;\
-	fi
+	$(call helm-install-plugin,unittest,https://github.com/helm-unittest/helm-unittest,$(HELM_UNITTEST_VERSION))
 
 
 .PHONY: helm-dependency-update
