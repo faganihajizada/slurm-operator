@@ -108,7 +108,6 @@ repos:
       - id: make-helm-unittest
         name: Make Helm Unittest
         entry: make helm-unittest
-        types: [yaml]
         files: ^helm/
         language: system
         pass_filenames: false

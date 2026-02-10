@@ -144,11 +144,7 @@ else \
 	verify_flag="" ;\
 fi ;\
 installed_version="$$( $(HELM) plugin list 2>/dev/null | awk '$$1=="$(1)" {print $$2}' )"; \
-if [ -n "$${installed_version}" ]; then \
-	if [ -n "$(3)" ] && [ "$${installed_version}" != "$(3)" ]; then \
-		$(HELM) plugin install "$(2)" --version "$(3)" $${verify_flag} ;\
-	fi ;\
-else \
+if [ -z "$${installed_version}" ]; then \
 	if [ -n "$(3)" ]; then \
 		$(HELM) plugin install "$(2)" --version "$(3)" $${verify_flag} ;\
 	else \
