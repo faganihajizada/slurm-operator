@@ -163,7 +163,7 @@ GOVULNCHECK ?= $(LOCALBIN)/govulncheck-$(GOVULNCHECK_VERSION)
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint-$(GOLANGCI_LINT_VERSION)
 HELM_DOCS ?= $(LOCALBIN)/helm-docs-$(HELM_DOCS_VERSION)
 PANDOC ?= $(LOCALBIN)/pandoc-$(PANDOC_VERSION)
-HELM ?= $(LOCALBIN)/helm
+HELM ?= $(LOCALBIN)/helm-$(HELM_VERSION)
 HELM_CONFIG_HOME ?= $(LOCALBIN)/helm-config
 HELM_CACHE_HOME ?= $(LOCALBIN)/helm-cache
 HELM_DATA_HOME ?= $(LOCALBIN)/helm-data
@@ -212,7 +212,7 @@ $(HELM_DOCS): $(LOCALBIN)
 	$(call go-install-tool,$(HELM_DOCS),github.com/norwoodj/helm-docs/cmd/helm-docs,$(HELM_DOCS_VERSION))
 
 .PHONY: helm-bin
-helm-bin: $(HELM) ## Download Helm v4 locally if necessary.
+helm-bin: $(HELM) ## Download Helm locally if necessary.
 $(HELM): $(LOCALBIN)
 	@if ! [ -f "$(HELM)" ]; then \
 		tmpdir="$$(mktemp -d)" ;\
