@@ -171,16 +171,16 @@ HELM_PLUGINS ?= $(LOCALBIN)/helm-plugins
 export HELM_CONFIG_HOME HELM_CACHE_HOME HELM_DATA_HOME HELM_PLUGINS
 
 ## Tool Versions
-CONTROLLER_TOOLS_VERSION ?= v0.18.0
-OPERATOR_SDK_VERSION ?= v1.41.1
+CONTROLLER_TOOLS_VERSION ?= v0.20.0
+OPERATOR_SDK_VERSION ?= v1.42.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 GOVULNCHECK_VERSION ?= latest
-GOLANGCI_LINT_VERSION ?= v2.6.0
+GOLANGCI_LINT_VERSION ?= v2.9.0
 HELM_DOCS_VERSION ?= v1.14.2
-PANDOC_VERSION ?= 3.7.0.2
-HELM_VERSION ?= v4.1.0
+PANDOC_VERSION ?= 3.9
+HELM_VERSION ?= v4.1.1
 HELM_UNITTEST_VERSION ?= v1.0.3
 
 .PHONY: controller-gen
