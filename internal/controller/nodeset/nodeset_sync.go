@@ -820,20 +820,20 @@ func (r *NodeSetReconciler) doPodProcessing(
 		return err
 	}
 
-	processReplicaFn := func(i int) error {
+	processNodeSetPodFn := func(i int) error {
 		pod := pods[i]
-		return r.processReplica(ctx, nodeset, pod)
+		return r.processNodeSetPod(ctx, nodeset, pod)
 	}
-	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, processReplicaFn); err != nil {
+	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, processNodeSetPodFn); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// processReplica will ensure the NodeSet pod replica can be scheduled and cleanup errant pods.
+// processNodeSetPod will ensure the NodeSet pod can be scheduled and cleanup errant pods.
 // NOTE: intended to be used by utils.SlowStartBatch().
-func (r *NodeSetReconciler) processReplica(
+func (r *NodeSetReconciler) processNodeSetPod(
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
 	pod *corev1.Pod,
