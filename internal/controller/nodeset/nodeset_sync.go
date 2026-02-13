@@ -676,7 +676,7 @@ func (r *NodeSetReconciler) newNodeSetPod(
 }
 
 // doPodScaleIn handles scaling-in NodeSet pods.
-// Ceratain NodeSet pods should be cordoned and drained, and defunct pods
+// Certain NodeSet pods should be cordoned and drained, and defunct pods
 // deleted after being fulled drained.
 func (r *NodeSetReconciler) doPodScaleIn(
 	ctx context.Context,
