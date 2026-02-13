@@ -161,6 +161,7 @@ spec:
                   These are replicas in the sense that they are instantiations of the
                   same Template, but individual replicas also have a consistent identity.
                   If unspecified, defaults to 1.
+                  When ScalingMode is daemonset, this field is ignored.
                 format: int32
                 type: integer
               revisionHistoryLimit:
@@ -171,6 +172,15 @@ spec:
                   NodeSetSpec version. The default value is 0.
                 format: int32
                 type: integer
+              scalingMode:
+                default: StatefulSet
+                description: |-
+                  ScalingMode controls how the NodeSet scales pods.
+                  "StatefulSet" uses a fixed replica count; "DaemonSet" schedules one pod per matching node.
+                enum:
+                - DaemonSet
+                - StatefulSet
+                type: string
               slurmd:
                 description: |-
                   The slurmd container configuration.

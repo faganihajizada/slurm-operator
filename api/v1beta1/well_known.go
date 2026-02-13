@@ -58,4 +58,8 @@ const (
 	// LabelNodeSetPodProtect indicates whether the pod is protected against eviction using a PodDisruptionBudget
 	// NOTE: Set by the NodeSet controller
 	LabelNodeSetPodProtect = NodeSetPrefix + "pod-protect"
+
+	// LabelNodeSetScalingMode indicates the scaling mode (DaemonSet or StatefulSet).
+	// NOTE: Set by the NodeSet controller.
+	LabelNodeSetScalingMode = NodeSetPrefix + "scaling-mode"
 )

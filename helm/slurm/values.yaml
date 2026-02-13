@@ -646,7 +646,9 @@ nodesets:
   slinky:
     # -- Enable use of this NodeSet.
     enabled: true
-    # -- Number of replicas to deploy.
+    # -- Scaling mode: "StatefulSet" (fixed replica count) or "DaemonSet" (one pod per matching node).
+    scalingMode: StatefulSet
+    # -- Number of replicas to deploy. Ignored when scalingMode is daemonset.
     replicas: 1
     # -- Taint the Kubernetes nodes on which nodeset pods are scheduled with NoExecute.
     taintKubeNodes: false

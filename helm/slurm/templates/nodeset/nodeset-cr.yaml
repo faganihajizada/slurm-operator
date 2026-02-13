@@ -56,6 +56,9 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}{{- /* if $nodeset.ssh.enabled */}}
   {{- end }}{{- /* with $nodeset.ssh */}}
+  {{- if $nodeset.scalingMode }}
+  scalingMode: {{ $nodeset.scalingMode }}
+  {{- end }}{{- /* if $nodeset.scalingMode */}}
   {{- if $nodeset.replicas }}
   replicas: {{ $nodeset.replicas }}
   {{- end }}{{- /* if $nodeset.replicas */}}

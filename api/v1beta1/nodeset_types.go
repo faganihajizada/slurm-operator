@@ -13,6 +13,17 @@ const (
 	NodeSetKind = "NodeSet"
 )
 
+// ScalingModeType is a string enumeration of how a NodeSet scales its pods.
+// +enum
+type ScalingModeType string
+
+const (
+	// ScalingModeStatefulset indicates replica-based scaling similar to a StatefulSet.
+	ScalingModeStatefulset ScalingModeType = "StatefulSet"
+	// ScalingModeDaemonset indicates one pod per matching node similar to a DaemonSet.
+	ScalingModeDaemonset ScalingModeType = "DaemonSet"
+)
+
 var (
 	NodeSetGVK        = GroupVersion.WithKind(NodeSetKind)
 	NodeSetAPIVersion = GroupVersion.String()
@@ -28,8 +39,16 @@ type NodeSetSpec struct {
 	// These are replicas in the sense that they are instantiations of the
 	// same Template, but individual replicas also have a consistent identity.
 	// If unspecified, defaults to 1.
+	// When ScalingMode is daemonset, this field is ignored.
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
+
+	// ScalingMode controls how the NodeSet scales pods.
+	// "StatefulSet" uses a fixed replica count; "DaemonSet" schedules one pod per matching node.
+	// +optional
+	// +kubebuilder:validation:Enum=DaemonSet;StatefulSet
+	// +kubebuilder:default:=StatefulSet
+	ScalingMode ScalingModeType `json:"scalingMode,omitempty"`
 
 	// The slurmd container configuration.
 	// See corev1.Container spec.
