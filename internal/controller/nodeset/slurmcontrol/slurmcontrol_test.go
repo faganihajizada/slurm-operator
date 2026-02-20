@@ -69,7 +69,8 @@ func newNodeSet(name, controllerName string, replicas int32) *slinkyv1beta1.Node
 				Namespace: corev1.NamespaceDefault,
 				Name:      controllerName,
 			},
-			Replicas: &replicas,
+			Replicas:    &replicas,
+			ScalingMode: slinkyv1beta1.ScalingModeStatefulset,
 		},
 	}
 }

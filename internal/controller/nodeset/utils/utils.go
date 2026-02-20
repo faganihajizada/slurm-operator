@@ -10,10 +10,12 @@ import (
 	"maps"
 	"regexp"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8scontroller "k8s.io/kubernetes/pkg/controller"
+	daemonutils "k8s.io/kubernetes/pkg/controller/daemon/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -53,31 +55,75 @@ func NewNodeSetStatefulSetPod(
 	return pod
 }
 
+func NewNodeSetDaemonSetPod(
+	client client.Client,
+	nodeset *slinkyv1beta1.NodeSet,
+	controller *slinkyv1beta1.Controller,
+	nodeName string,
+	revisionHash string,
+) *corev1.Pod {
+	controllerRef := metav1.NewControllerRef(nodeset, slinkyv1beta1.NodeSetGVK)
+	podTemplate := builder.New(client).BuildWorkerPodTemplate(nodeset, controller)
+	pod, _ := k8scontroller.GetPodFromTemplate(&podTemplate, nodeset, controllerRef)
+
+	pod.Spec.Hostname = nodeName
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = nodeName
+
+	initIdentity(nodeset, pod)
+	UpdateStorage(nodeset, pod)
+
+	if revisionHash != "" {
+		historycontrol.SetRevision(pod.Labels, revisionHash)
+	}
+
+	// The pod's PodAntiAffinity will be updated to make sure the Pod is not
+	// scheduled on the same Node as another NodeSet pod.
+	pod.Spec.Affinity = updateNodeSetPodAntiAffinity(pod.Spec.Affinity)
+
+	// WARNING: Do not use the spec.NodeName otherwise the Pod scheduler will
+	// be avoided and priorityClass will not be honored.
+	pod.Spec.NodeName = ""
+
+	pod.GenerateName = nodeset.Name + "-"
+	pod.Name = ""
+	pod.Spec.Affinity = daemonutils.ReplaceDaemonSetPodNodeNameNodeAffinity(pod.Spec.Affinity, nodeName)
+
+	return pod
+}
+
 func initIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 	UpdateIdentity(nodeset, pod)
 	// Set these immutable fields only on initial Pod creation, not updates.
-	if pod.Spec.Hostname != "" {
-		ordinal := GetOrdinal(pod)
-		paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
-		pod.Spec.Hostname = fmt.Sprintf("%s%s", pod.Spec.Hostname, paddedOrdinal)
-	} else {
-		pod.Spec.Hostname = pod.Name
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		if pod.Spec.Hostname != "" {
+			ordinal := GetOrdinal(pod)
+			paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
+			pod.Spec.Hostname = fmt.Sprintf("%s%s", pod.Spec.Hostname, paddedOrdinal)
+		} else {
+			pod.Spec.Hostname = pod.Name
+		}
 	}
 	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = GetNodeName(pod)
+	pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode] = string(nodeset.Spec.ScalingMode)
 }
 
 // UpdateIdentity updates pod's name, hostname, and subdomain, and StatefulSetPodNameLabel to conform to nodeset's name
 // and headless service.
 func UpdateIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
-	ordinal := GetOrdinal(pod)
-	paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
-	pod.Name = GetOrdinalPodName(nodeset, ordinal)
 	pod.Namespace = nodeset.Namespace
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string)
 	}
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		ordinal := GetOrdinal(pod)
+		paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
+		pod.Name = GetOrdinalPodName(nodeset, ordinal)
+		pod.Labels[slinkyv1beta1.LabelNodeSetPodIndex] = paddedOrdinal
+	}
 	pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
-	pod.Labels[slinkyv1beta1.LabelNodeSetPodIndex] = paddedOrdinal
 	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = GetNodeName(pod)
 }
 
@@ -204,21 +250,30 @@ func GetOrdinalPodName(nodeset *slinkyv1beta1.NodeSet, ordinal int) string {
 
 // GetNodeName returns the Slurm node name
 func GetNodeName(pod *corev1.Pod) string {
-	if pod.Spec.HostNetwork {
-		return pod.Spec.NodeName
-	}
-	if pod.Spec.Hostname != "" {
+	if pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode] == string(slinkyv1beta1.ScalingModeStatefulset) {
+		if pod.Spec.HostNetwork {
+			return pod.Spec.NodeName
+		}
+		if pod.Spec.Hostname != "" {
+			return pod.Spec.Hostname
+		}
+		return pod.Name
+	} else {
 		return pod.Spec.Hostname
 	}
-	return pod.Name
 }
 
 // IsIdentityMatch returns true if pod has a valid identity and network identity for a member of nodeset.
 func IsIdentityMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
-	parent, ordinal := GetParentNameAndOrdinal(pod)
-	return ordinal >= 0 &&
-		nodeset.Name == parent &&
-		pod.Name == GetOrdinalPodName(nodeset, ordinal) &&
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		parent, ordinal := GetParentNameAndOrdinal(pod)
+		return ordinal >= 0 &&
+			nodeset.Name == parent &&
+			pod.Name == GetOrdinalPodName(nodeset, ordinal) &&
+			pod.Namespace == nodeset.Namespace &&
+			pod.Labels[slinkyv1beta1.LabelNodeSetPodName] == pod.Name
+	}
+	return nodeset.Name == strings.TrimSuffix(pod.GenerateName, "-") &&
 		pod.Namespace == nodeset.Namespace &&
 		pod.Labels[slinkyv1beta1.LabelNodeSetPodName] == pod.Name
 }

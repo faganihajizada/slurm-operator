@@ -6,6 +6,7 @@ package nodeset
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -15,10 +16,15 @@ import (
 	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	v1helper "k8s.io/component-helpers/scheduling/corev1"
+	"k8s.io/component-helpers/scheduling/corev1/nodeaffinity"
 	"k8s.io/klog/v2"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	kubecontroller "k8s.io/kubernetes/pkg/controller"
+	daemonutils "k8s.io/kubernetes/pkg/controller/daemon/util"
 	"k8s.io/kubernetes/pkg/controller/history"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/util/taints"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/set"
@@ -41,6 +47,11 @@ import (
 
 const (
 	burstReplicas = 250
+
+	// FailedDaemonPodReason is added to an event when the status of a Pod of a DaemonSet is 'Failed'.
+	FailedDaemonPodReason = "FailedDaemonPod"
+	// SucceededDaemonPodReason is added to an event when the status of a Pod of a DaemonSet is 'Succeeded'.
+	SucceededDaemonPodReason = "SucceededDaemonPod"
 )
 
 // Sync implements control logic for synchronizing a NodeSet and its derived Pods.
@@ -538,6 +549,165 @@ func (r *NodeSetReconciler) syncSlurmTopology(
 	return nil
 }
 
+// EnqueueNodeSetAfter schedules a reconcile of the NodeSet after the given delay.
+// It uses the shared durationStore so that the next Reconcile result will have RequeueAfter set.
+func (r *NodeSetReconciler) EnqueueNodeSetAfter(nodeset *slinkyv1beta1.NodeSet, after time.Duration) {
+	key := objectutils.KeyFunc(nodeset)
+	durationStore.Push(key, after)
+}
+
+func (r *NodeSetReconciler) getNodesToDaemonPods(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, includeDeletedTerminal bool) map[string][]*corev1.Pod {
+	// Group Pods by Node name.
+	nodeToDaemonPods := make(map[string][]*corev1.Pod)
+	logger := klog.FromContext(ctx)
+	for _, pod := range pods {
+		if !includeDeletedTerminal && podutil.IsPodTerminal(pod) && pod.DeletionTimestamp != nil {
+			// This Pod has a finalizer or is already scheduled for deletion from the
+			// store by the kubelet or the Pod GC. The DS controller doesn't have
+			// anything else to do with it.
+			continue
+		}
+		nodeName, err := daemonutils.GetTargetNodeName(pod)
+		if err != nil {
+			logger.V(4).Info("Failed to get target node name of Pod in NodeSet",
+				"pod", klog.KObj(pod), "daemonset", klog.KObj(nodeset))
+			continue
+		}
+
+		nodeToDaemonPods[nodeName] = append(nodeToDaemonPods[nodeName], pod)
+	}
+
+	return nodeToDaemonPods
+}
+
+func predicates(logger klog.Logger, pod *corev1.Pod, node *corev1.Node, taints []corev1.Taint) (fitsNodeName, fitsNodeAffinity, fitsTaints bool) {
+	fitsNodeName = len(pod.Spec.NodeName) == 0 || pod.Spec.NodeName == node.Name
+	// Ignore parsing errors for backwards compatibility.
+	fitsNodeAffinity, _ = nodeaffinity.GetRequiredNodeAffinity(pod).Match(node)
+	_, hasUntoleratedTaint := v1helper.FindMatchingUntoleratedTaint(logger, taints, pod.Spec.Tolerations, func(t *corev1.Taint) bool {
+		return t.Effect == corev1.TaintEffectNoExecute || t.Effect == corev1.TaintEffectNoSchedule
+	}, utilfeature.DefaultFeatureGate.Enabled(features.TaintTolerationComparisonOperators))
+	fitsTaints = !hasUntoleratedTaint
+	return
+}
+
+// NodeShouldRunDaemonPod checks a set of preconditions against a (node,daemonset) and returns a
+// summary. Returned booleans are:
+//   - shouldRun:
+//     Returns true when a daemonset should run on the node if a daemonset pod is not already
+//     running on that node.
+//   - shouldContinueRunning:
+//     Returns true when a daemonset should continue running on a node if a daemonset pod is already
+//     running on that node.
+func (r *NodeSetReconciler) NodeShouldRunDaemonPod(ctx context.Context, node *corev1.Node, nodeset *slinkyv1beta1.NodeSet) (bool, bool) {
+	logger := log.FromContext(ctx)
+	pod, err := r.newNodeSetPodDaemon(r.Client, ctx, nodeset, node.Name, "")
+	if err != nil {
+		return false, false
+	}
+
+	taints := node.Spec.Taints
+	fitsNodeName, fitsNodeAffinity, fitsTaints := predicates(logger, pod, node, taints)
+	if !fitsNodeName || !fitsNodeAffinity {
+		return false, false
+	}
+
+	if !fitsTaints {
+		// Scheduled daemon pods should continue running if they tolerate NoExecute taint.
+		_, hasUntoleratedTaint := v1helper.FindMatchingUntoleratedTaint(logger, taints, pod.Spec.Tolerations, func(t *corev1.Taint) bool {
+			return t.Effect == corev1.TaintEffectNoExecute
+		}, utilfeature.DefaultFeatureGate.Enabled(features.TaintTolerationComparisonOperators))
+		return false, !hasUntoleratedTaint
+	}
+
+	return true, true
+}
+
+func failedPodsBackoffKey(nodeset *slinkyv1beta1.NodeSet, nodeName string) string {
+	return fmt.Sprintf("%s/%d/%s", nodeset.UID, nodeset.Status.ObservedGeneration, nodeName)
+}
+
+func (r *NodeSetReconciler) podsShouldBeOnNode(
+	ctx context.Context,
+	node *corev1.Node,
+	nodeToDaemonPods map[string][]*corev1.Pod,
+	nodeset *slinkyv1beta1.NodeSet,
+) (nodesNeedingDaemonPods []string, podsToDelete []*corev1.Pod) {
+
+	logger := log.FromContext(ctx)
+	shouldRun, shouldContinueRunning := r.NodeShouldRunDaemonPod(ctx, node, nodeset)
+	daemonPods, exists := nodeToDaemonPods[node.Name]
+
+	switch {
+	case shouldRun && !exists:
+		// If daemon pod is supposed to be running on node, but isn't, create daemon pod.
+		nodesNeedingDaemonPods = append(nodesNeedingDaemonPods, node.Name)
+	case shouldContinueRunning:
+		// If a daemon pod failed, delete it
+		// If there's non-daemon pods left on this node, we will create it in the next sync loop
+		var daemonPodsRunning []*corev1.Pod
+		for _, pod := range daemonPods {
+			switch {
+			case pod.DeletionTimestamp != nil:
+				continue
+
+			case pod.Status.Phase == corev1.PodFailed:
+				// This is a critical place where the controller often fights with kubelet that rejects pods.
+				// We need to avoid hot looping and backoff.
+				backoffKey := failedPodsBackoffKey(nodeset, node.Name)
+
+				now := failedPodsBackoff.Clock.Now()
+				inBackoff := failedPodsBackoff.IsInBackOffSinceUpdate(backoffKey, now)
+				if inBackoff {
+					delay := failedPodsBackoff.Get(backoffKey)
+					logger.V(4).Info("Deleting failed pod on node has been limited by backoff",
+						"pod", klog.KObj(pod), "node", klog.KObj(node), "currentDelay", delay)
+					r.EnqueueNodeSetAfter(nodeset, delay)
+					continue
+				}
+
+				failedPodsBackoff.Next(backoffKey, now)
+
+				msg := fmt.Sprintf("Found failed daemon pod %s/%s on node %s, will try to kill it", pod.Namespace, pod.Name, node.Name)
+				logger.V(2).Info("Found failed daemon pod on node, will try to kill it", "pod", klog.KObj(pod), "node", klog.KObj(node))
+				// Emit an event so that it's discoverable to users.
+				r.eventRecorder.Eventf(nodeset, corev1.EventTypeWarning, FailedDaemonPodReason, msg)
+				podsToDelete = append(podsToDelete, pod)
+
+			case pod.Status.Phase == corev1.PodSucceeded:
+				msg := fmt.Sprintf("Found succeeded daemon pod %s/%s on node %s, will try to delete it", pod.Namespace, pod.Name, node.Name)
+				logger.V(2).Info("Found succeeded daemon pod on node, will try to delete it", "pod", klog.KObj(pod), "node", klog.KObj(node))
+				// Emit an event so that it's discoverable to users.
+				r.eventRecorder.Eventf(nodeset, corev1.EventTypeNormal, SucceededDaemonPodReason, msg)
+				podsToDelete = append(podsToDelete, pod)
+
+			default:
+				daemonPodsRunning = append(daemonPodsRunning, pod)
+			}
+		}
+
+		// NodeSet allows at most one pod per node. If there is more than one running pod, delete all but the oldest.
+		if len(daemonPodsRunning) <= 1 {
+			break
+		}
+		sort.Sort(nodesetutils.ActivePods(daemonPodsRunning))
+		for i := 1; i < len(daemonPodsRunning); i++ {
+			podsToDelete = append(podsToDelete, daemonPodsRunning[i])
+		}
+
+	case !shouldContinueRunning && exists:
+		// If daemon pod isn't supposed to run on node, but it is, delete all daemon pods on node.
+		for _, pod := range daemonPods {
+			if pod.DeletionTimestamp != nil {
+				continue
+			}
+			podsToDelete = append(podsToDelete, pod)
+		}
+	}
+
+	return nodesNeedingDaemonPods, podsToDelete
+}
+
 // syncNodeSet will reconcile NodeSet pod replica counts.
 // Pods will be:
 //   - Scaled out when: `replicaCount < replicasWant“
@@ -551,23 +721,64 @@ func (r *NodeSetReconciler) syncNodeSet(
 ) error {
 	logger := log.FromContext(ctx)
 
-	// Handle replica scaling by comparing the known pods to the target number of replicas.
-	// Create or delete pods as needed to reach the target number.
-	replicaCount := int(ptr.Deref(nodeset.Spec.Replicas, 0))
-	diff := len(pods) - replicaCount
-	if diff < 0 {
-		diff = -diff
-		logger.V(2).Info("Too few NodeSet pods", "need", replicaCount, "creating", diff)
-		return r.doPodScaleOut(ctx, nodeset, pods, diff, hash)
+	// Delete pods that were created for a different ScalingMode
+	// (e.g. after switching nodeset from statefulset to daemonset or vice versa).
+	var podsToDelete, podsToKeep []*corev1.Pod
+	for _, pod := range pods {
+		podMode := slinkyv1beta1.ScalingModeType(pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode])
+		if podMode != nodeset.Spec.ScalingMode {
+			podsToDelete = append(podsToDelete, pod)
+		} else {
+			podsToKeep = append(podsToKeep, pod)
+		}
 	}
-
-	if diff > 0 {
-		logger.V(2).Info("Too many NodeSet pods", "need", replicaCount, "deleting", diff)
-		podsToDelete, podsToKeep := nodesetutils.SplitActivePods(pods, diff)
+	if len(podsToDelete) > 0 {
+		logger.V(2).Info("Deleting pods with wrong ScalingMode", "desired", nodeset.Spec.ScalingMode, "count", len(podsToDelete))
 		return r.doPodScaleIn(ctx, nodeset, podsToDelete, podsToKeep)
 	}
 
-	logger.V(2).Info("Processing NodeSet pods", "replicas", replicaCount)
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeDaemonset {
+		logger.V(2).Info("Processing NodeSet pods in DaemonSet mode")
+		nodeList := &corev1.NodeList{}
+		if err := r.List(ctx, nodeList); err != nil {
+			return err
+		}
+		nodeToDaemonPods := r.getNodesToDaemonPods(ctx, nodeset, pods, false)
+		var nodesNeedingDaemonPods []string
+		var podsToDelete []*corev1.Pod
+		for _, node := range nodeList.Items {
+			nodesNeedingDaemonPodsOnNode, podsToDeleteOnNode := r.podsShouldBeOnNode(
+				ctx, &node, nodeToDaemonPods, nodeset)
+
+			nodesNeedingDaemonPods = append(nodesNeedingDaemonPods, nodesNeedingDaemonPodsOnNode...)
+			podsToDelete = append(podsToDelete, podsToDeleteOnNode...)
+		}
+		if len(nodesNeedingDaemonPods) > 0 {
+			return r.doPodScaleOut(ctx, nodeset, pods, nodesNeedingDaemonPods, len(nodesNeedingDaemonPods), hash)
+		}
+		if len(podsToDelete) > 0 {
+			return r.doPodScaleIn(ctx, nodeset, podsToDelete, []*corev1.Pod{})
+		}
+	} else {
+		logger.V(2).Info("Processing NodeSet pods for replica scaling")
+		// Handle replica scaling by comparing the known pods to the target number of replicas.
+		// Create or delete pods as needed to reach the target number.
+		replicaCount := int(ptr.Deref(nodeset.Spec.Replicas, 0))
+		diff := len(pods) - replicaCount
+		if diff < 0 {
+			diff = -diff
+			logger.V(2).Info("Too few NodeSet pods", "need", replicaCount, "creating", diff)
+			return r.doPodScaleOut(ctx, nodeset, pods, []string{}, diff, hash)
+		}
+
+		if diff > 0 {
+			logger.V(2).Info("Too many NodeSet pods", "need", replicaCount, "deleting", diff)
+			podsToDelete, podsToKeep := nodesetutils.SplitActivePods(pods, diff)
+			return r.doPodScaleIn(ctx, nodeset, podsToDelete, podsToKeep)
+		}
+	}
+
+	logger.V(2).Info("Processing NodeSet pods", "number of pods to process", len(pods))
 	return r.doPodProcessing(ctx, nodeset, pods, hash)
 }
 
@@ -577,6 +788,7 @@ func (r *NodeSetReconciler) doPodScaleOut(
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
 	pods []*corev1.Pod,
+	possibleNodes []string,
 	numCreate int,
 	hash string,
 ) error {
@@ -600,16 +812,26 @@ func (r *NodeSetReconciler) doPodScaleOut(
 
 	podsToCreate := make([]*corev1.Pod, numCreate)
 	ordinal := 0
-	for i := range numCreate {
-		for usedOrdinals.Has(ordinal) {
-			ordinal++
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		for i := range numCreate {
+			for usedOrdinals.Has(ordinal) {
+				ordinal++
+			}
+			pod, err := r.newNodeSetPodOrdinal(r.Client, ctx, nodeset, ordinal, hash)
+			if err != nil {
+				return err
+			}
+			usedOrdinals.Insert(ordinal)
+			podsToCreate[i] = pod
 		}
-		pod, err := r.newNodeSetPod(r.Client, ctx, nodeset, ordinal, hash)
-		if err != nil {
-			return err
+	} else {
+		for i := range len(possibleNodes) {
+			pod, err := r.newNodeSetPodDaemon(r.Client, ctx, nodeset, possibleNodes[i], hash)
+			if err != nil {
+				return err
+			}
+			podsToCreate[i] = pod
 		}
-		usedOrdinals.Insert(ordinal)
-		podsToCreate[i] = pod
 	}
 
 	// TODO: Track UIDs of creates just like deletes. The problem currently
@@ -657,7 +879,27 @@ func (r *NodeSetReconciler) doPodScaleOut(
 	return err
 }
 
-func (r *NodeSetReconciler) newNodeSetPod(
+func (r *NodeSetReconciler) newNodeSetPodDaemon(
+	client client.Client,
+	ctx context.Context,
+	nodeset *slinkyv1beta1.NodeSet,
+	nodeName string,
+	revisionHash string,
+) (*corev1.Pod, error) {
+	controller := &slinkyv1beta1.Controller{}
+	key := nodeset.Spec.ControllerRef.NamespacedName()
+	if err := r.Get(ctx, key, controller); err != nil {
+		return nil, err
+	}
+	if nodeName == "" {
+		return nil, fmt.Errorf("nodeName must not be empty")
+	}
+
+	pod := nodesetutils.NewNodeSetDaemonSetPod(client, nodeset, controller, nodeName, revisionHash)
+	return pod, nil
+}
+
+func (r *NodeSetReconciler) newNodeSetPodOrdinal(
 	client client.Client,
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
@@ -1110,6 +1352,9 @@ func (r *NodeSetReconciler) splitUpdatePods(
 		}
 
 		total := int(ptr.Deref(nodeset.Spec.Replicas, 0))
+		if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeDaemonset {
+			total = len(pods)
+		}
 		maxUnavailable := mathutils.GetScaledValueFromIntOrPercent(nodeset.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable, total, true, 1)
 		remainingUnavailable := mathutils.Clamp((maxUnavailable - numUnavailable), 0, maxUnavailable)
 		podsToDelete, remainingOldPods := nodesetutils.SplitActivePods(oldPods, remainingUnavailable)

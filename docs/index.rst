@@ -25,6 +25,10 @@ Table of Contents
 
     - `Controller <#controller>`__
     - `NodeSets <#nodesets>`__
+
+      - ```StatefulSet`` (default) <#statefulset-default>`__
+      - ```DaemonSet`` <#daemonset>`__
+
     - `LoginSets <#loginsets>`__
     - `Hybrid Support <#hybrid-support>`__
     - `Slurm <#slurm>`__
@@ -134,6 +138,33 @@ Slurm node states (e.g. Idle, Allocated, Mixed, Down, Drain, Not
 Responding, etc…) are applied to each NodeSet pod via their pod
 conditions; each NodeSet pod contains a pod status that reflects their
 own Slurm node state.
+
+The NodeSet CRD supports a ``scalingMode`` field that controls how many
+pods are created and how they are scaled. This allows you to choose
+between replica-based scaling (like a StatefulSet) or one-pod-per-node
+scaling (like a DaemonSet).
+
+``StatefulSet`` (default)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- **Behavior**: The controller maintains a fixed number of pods
+  according to the ``replicas`` field.
+- **Use when**: A fixed or scalable number of Slurm worker pods is
+  needed. Scale-to-zero and horizontal autoscaling (e.g. HPA) apply to
+  this mode.
+- **Note**: Each pod has a stable identity (e.g. ordinal-based naming)
+
+``DaemonSet``
+^^^^^^^^^^^^^
+
+- **Behavior**: The controller schedules one pod per Kubernetes node
+  that matches the NodeSet’s pod template (e.g. ``nodeSelector``,
+  ``tolerations``). Pod count follows the number of matching nodes.
+  Adding or removing nodes automatically adds or removes pods.
+- **Use when**: 1:1 alignment between Kubernetes and Slurm (slurmd)
+  nodes is needed.
+- **Note**: The ``replicas`` field is ignored. Pod identity is tied to
+  the node (e.g. node name) rather than an ordinal.
 
 The operator supports NodeSet scale to zero, scaling the resource down
 to zero replicas. Hence, any Horizontal Pod Autoscaler (HPA) that also

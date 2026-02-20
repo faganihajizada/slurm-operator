@@ -24,6 +24,7 @@ import (
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/builder/labels"
+	"github.com/SlinkyProject/slurm-operator/internal/utils/historycontrol"
 )
 
 func newNodeSet(name string) *slinkyv1beta1.NodeSet {
@@ -34,6 +35,12 @@ func newNodeSet(name string) *slinkyv1beta1.NodeSet {
 		{Name: "home", MountPath: "/home"},
 	}
 	return newNodeSetWithVolumes(name, petMounts, podMounts)
+}
+
+func newNodeSetDaemonset(name string) *slinkyv1beta1.NodeSet {
+	ns := newNodeSet(name)
+	ns.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	return ns
 }
 
 func newNodeSetWithVolumes(name string, petMounts []corev1.VolumeMount, podMounts []corev1.VolumeMount) *slinkyv1beta1.NodeSet {
@@ -362,11 +369,159 @@ func TestIsIdentityMatch(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "Match (Daemonset)",
+			args: args{
+				nodeset: newNodeSetDaemonset("foo"),
+				pod: func() *corev1.Pod {
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", "")
+					pod.Name = "foo-abc123"
+					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
+					return pod
+				}(),
+			},
+			want: true,
+		},
+		{
+			name: "Not Match (Daemonset)",
+			args: args{
+				nodeset: newNodeSetDaemonset("foo"),
+				pod: func() *corev1.Pod {
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("bar"), controller, "node-1", "")
+					pod.Name = "bar-abc123"
+					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
+					return pod
+				}(),
+			},
+			want: false,
+		},
+		{
+			name: "DaemonSet not match wrong label",
+			args: args{
+				nodeset: newNodeSetDaemonset("foo"),
+				pod: func() *corev1.Pod {
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", "")
+					pod.Name = "foo-abc123"
+					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = "bar-abc123"
+					return pod
+				}(),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsIdentityMatch(tt.args.nodeset, tt.args.pod); got != tt.want {
 				t.Errorf("IsIdentityMatch() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewNodeSetDaemonSetPod(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "foo",
+		},
+	}
+	client := fake.NewFakeClient()
+	nodeset := newNodeSetDaemonset("foo")
+
+	type args struct {
+		nodeName     string
+		revisionHash string
+	}
+	tests := []struct {
+		name          string
+		args          args
+		wantRevision  *string
+		checkIdentity bool
+		checkVolumes  bool
+	}{
+		{
+			name: "Sets identity and daemon pod fields",
+			args: args{
+				nodeName:     "node-1",
+				revisionHash: "",
+			},
+			checkIdentity: true,
+		},
+		{
+			name: "Sets revision label when revisionHash is non-empty",
+			args: args{
+				nodeName:     "node-1",
+				revisionHash: "abc123",
+			},
+			wantRevision: ptr.To("abc123"),
+		},
+		{
+			name: "Does not set revision label when revisionHash is empty",
+			args: args{
+				nodeName:     "node-1",
+				revisionHash: "",
+			},
+			wantRevision: ptr.To(""),
+		},
+		{
+			name: "Sets volumes from VolumeClaimTemplates",
+			args: args{
+				nodeName:     "node-1",
+				revisionHash: "",
+			},
+			checkVolumes: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := NewNodeSetDaemonSetPod(client, nodeset, controller, tt.args.nodeName, tt.args.revisionHash)
+			if pod == nil {
+				t.Fatal("NewNodeSetDaemonSetPod() returned nil")
+			}
+			if tt.checkIdentity {
+				if pod.GenerateName != nodeset.Name+"-" {
+					t.Errorf("GenerateName = %q, want %q", pod.GenerateName, nodeset.Name+"-")
+				}
+				if pod.Name != "" {
+					t.Errorf("Name = %q, want %q", pod.Name, "")
+				}
+				if pod.Namespace != nodeset.Namespace {
+					t.Errorf("Namespace = %q, want %q", pod.Namespace, nodeset.Namespace)
+				}
+				if pod.Spec.Hostname != tt.args.nodeName {
+					t.Errorf("Spec.Hostname = %q, want %q", pod.Spec.Hostname, tt.args.nodeName)
+				}
+				if pod.Spec.NodeName != "" {
+					t.Errorf("Spec.NodeName = %q, want empty", pod.Spec.NodeName)
+				}
+				if got := pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname]; got != tt.args.nodeName {
+					t.Errorf("Labels[%s] = %q, want %q", slinkyv1beta1.LabelNodeSetPodHostname, got, tt.args.nodeName)
+				}
+				if got := pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode]; got != string(slinkyv1beta1.ScalingModeDaemonset) {
+					t.Errorf("Labels[%s] = %q, want %q", slinkyv1beta1.LabelNodeSetScalingMode, got, string(slinkyv1beta1.ScalingModeDaemonset))
+				}
+				if len(pod.OwnerReferences) != 1 || pod.OwnerReferences[0].Kind != slinkyv1beta1.NodeSetKind || pod.OwnerReferences[0].Name != nodeset.Name {
+					t.Errorf("OwnerReferences = %+v, want single ref to NodeSet %q", pod.OwnerReferences, nodeset.Name)
+				}
+			}
+			if tt.wantRevision != nil {
+				if got := historycontrol.GetRevision(pod.Labels); got != *tt.wantRevision {
+					t.Errorf("revision label = %q, want %q", got, *tt.wantRevision)
+				}
+			}
+			if tt.checkVolumes {
+				claimNames := make(map[string]bool)
+				for _, v := range pod.Spec.Volumes {
+					if v.PersistentVolumeClaim != nil {
+						claimNames[v.PersistentVolumeClaim.ClaimName] = true
+					}
+				}
+				for i := range nodeset.Spec.VolumeClaimTemplates {
+					claim := &nodeset.Spec.VolumeClaimTemplates[i]
+					wantName := GetPersistentVolumeClaimNameNodeName(nodeset, claim, tt.args.nodeName)
+					if !claimNames[wantName] {
+						t.Errorf("missing volume with ClaimName %q", wantName)
+					}
+				}
 			}
 		})
 	}
@@ -400,6 +555,34 @@ func TestIsStorageMatch(t *testing.T) {
 			args: args{
 				nodeset: newNodeSet("foo"),
 				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+			},
+			want: false,
+		},
+		{
+			name: "Match (Daemonset)",
+			args: args{
+				nodeset: newNodeSetDaemonset("foo"),
+				pod:     NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", ""),
+			},
+			want: true,
+		},
+		{
+			name: "Not Match (Daemonset)",
+			args: args{
+				nodeset: newNodeSetDaemonset("foo"),
+				pod:     NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("bar"), controller, "node-1", ""),
+			},
+			want: false,
+		},
+		{
+			name: "Not Match (Daemonset wrong hostname label)",
+			args: args{
+				nodeset: newNodeSetDaemonset("foo"),
+				pod: func() *corev1.Pod {
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", "")
+					pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = "node-2"
+					return pod
+				}(),
 			},
 			want: false,
 		},
@@ -527,6 +710,41 @@ func TestGetPersistentVolumeClaimNameOrdinal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := GetPersistentVolumeClaimNameOrdinal(tt.args.nodeset, tt.args.claim, tt.args.paddedOrdinal); got != tt.want {
 				t.Errorf("GetPersistentVolumeClaimNameOrdinal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetPersistentVolumeClaimNameNodeName(t *testing.T) {
+	type args struct {
+		nodeset  *slinkyv1beta1.NodeSet
+		claim    *corev1.PersistentVolumeClaim
+		nodeName string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "Single node name",
+			args: args{
+				nodeset: newNodeSet("foo"),
+				claim: &corev1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: corev1.NamespaceDefault,
+						Name:      "datadir",
+					},
+				},
+				nodeName: "node-1",
+			},
+			want: "datadir-foo-node-1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetPersistentVolumeClaimNameNodeName(tt.args.nodeset, tt.args.claim, tt.args.nodeName); got != tt.want {
+				t.Errorf("GetPersistentVolumeClaimNameNodeName() = %v, want %v", got, tt.want)
 			}
 		})
 	}
