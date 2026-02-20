@@ -173,44 +173,6 @@ func TestIsPodFromNodeSet(t *testing.T) {
 	}
 }
 
-func TestGetParentName(t *testing.T) {
-	controller := &slinkyv1beta1.Controller{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "foo",
-		},
-	}
-	type args struct {
-		pod *corev1.Pod
-	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{
-			name: "foo-0",
-			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
-			},
-			want: "foo",
-		},
-		{
-			name: "bar-1",
-			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
-			},
-			want: "bar",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := GetParentName(tt.args.pod); got != tt.want {
-				t.Errorf("GetParentName() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGetOrdinal(t *testing.T) {
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{

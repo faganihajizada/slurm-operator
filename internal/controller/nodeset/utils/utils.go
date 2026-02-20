@@ -164,12 +164,6 @@ func IsPodFromNodeSet(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
 	return found
 }
 
-// GetParentName gets the name of pod's parent NodeSet. If pod has not parent, the empty string is returned.
-func GetParentName(pod *corev1.Pod) string {
-	parent, _ := GetParentNameAndOrdinal(pod)
-	return parent
-}
-
 // GetOrdinal gets pod's ordinal. If pod has no ordinal, -1 is returned.
 func GetOrdinal(pod *corev1.Pod) int {
 	_, ordinal := GetParentNameAndOrdinal(pod)
