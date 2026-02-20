@@ -479,7 +479,7 @@ func TestGetPersistentVolumeClaims(t *testing.T) {
 	}
 }
 
-func TestGetPersistentVolumeClaimName(t *testing.T) {
+func TestGetPersistentVolumeClaimNameOrdinal(t *testing.T) {
 	type args struct {
 		nodeset       *slinkyv1beta1.NodeSet
 		claim         *corev1.PersistentVolumeClaim
@@ -521,8 +521,8 @@ func TestGetPersistentVolumeClaimName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetPersistentVolumeClaimName(tt.args.nodeset, tt.args.claim, tt.args.paddedOrdinal); got != tt.want {
-				t.Errorf("GetPersistentVolumeClaimName() = %v, want %v", got, tt.want)
+			if got := GetPersistentVolumeClaimNameOrdinal(tt.args.nodeset, tt.args.claim, tt.args.paddedOrdinal); got != tt.want {
+				t.Errorf("GetPersistentVolumeClaimNameOrdinal() = %v, want %v", got, tt.want)
 			}
 		})
 	}

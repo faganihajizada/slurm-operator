@@ -161,7 +161,7 @@ func (r *realPodControl) PodPVCsMatchRetentionPolicy(ctx context.Context, nodese
 	paddedOrdinal := nodesetutils.GetPaddedOrdinal(nodeset, ordinal)
 	templates := nodeset.Spec.VolumeClaimTemplates
 	for i := range templates {
-		claimName := nodesetutils.GetPersistentVolumeClaimName(nodeset, &templates[i], paddedOrdinal)
+		claimName := nodesetutils.GetPersistentVolumeClaimNameOrdinal(nodeset, &templates[i], paddedOrdinal)
 		claim := &corev1.PersistentVolumeClaim{}
 		claimId := types.NamespacedName{
 			Namespace: nodeset.Namespace,
@@ -189,7 +189,7 @@ func (r *realPodControl) UpdatePodPVCsForRetentionPolicy(ctx context.Context, no
 	paddedOrdinal := nodesetutils.GetPaddedOrdinal(nodeset, ordinal)
 	templates := nodeset.Spec.VolumeClaimTemplates
 	for i := range templates {
-		claimName := nodesetutils.GetPersistentVolumeClaimName(nodeset, &templates[i], paddedOrdinal)
+		claimName := nodesetutils.GetPersistentVolumeClaimNameOrdinal(nodeset, &templates[i], paddedOrdinal)
 		claimId := types.NamespacedName{
 			Namespace: nodeset.Namespace,
 			Name:      claimName,
