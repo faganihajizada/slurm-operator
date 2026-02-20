@@ -78,7 +78,8 @@ func newNodeSetWithVolumes(name string, petMounts []corev1.VolumeMount, podMount
 			UID:       types.UID("test"),
 		},
 		Spec: slinkyv1beta1.NodeSetSpec{
-			Replicas: ptr.To[int32](1),
+			Replicas:    ptr.To[int32](1),
+			ScalingMode: slinkyv1beta1.ScalingModeStatefulset,
 			Slurmd: slinkyv1beta1.ContainerWrapper{
 				Container: corev1.Container{
 					Image:        "nginx",
@@ -437,6 +438,9 @@ func TestGetPersistentVolumeClaims(t *testing.T) {
 						Labels: map[string]string{
 							"foo": "bar",
 						},
+					},
+					Spec: slinkyv1beta1.NodeSetSpec{
+						ScalingMode: slinkyv1beta1.ScalingModeStatefulset,
 					},
 				}
 				return args{

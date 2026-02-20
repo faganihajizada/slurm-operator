@@ -225,10 +225,13 @@ func IsIdentityMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
 
 // IsStorageMatch returns true if pod's Volumes cover the nodeset of PersistentVolumeClaims
 func IsStorageMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
-	ordinal := GetOrdinal(pod)
-	paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
-	if ordinal < 0 {
-		return false
+	var paddedOrdinal string
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		ordinal := GetOrdinal(pod)
+		paddedOrdinal = GetPaddedOrdinal(nodeset, ordinal)
+		if ordinal < 0 {
+			return false
+		}
 	}
 	volumes := make(map[string]corev1.Volume, len(pod.Spec.Volumes))
 	for _, volume := range pod.Spec.Volumes {
@@ -236,11 +239,20 @@ func IsStorageMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
 	}
 	for _, claim := range nodeset.Spec.VolumeClaimTemplates {
 		volume, found := volumes[claim.Name]
-		if !found ||
-			volume.PersistentVolumeClaim == nil ||
-			volume.PersistentVolumeClaim.ClaimName !=
-				GetPersistentVolumeClaimNameOrdinal(nodeset, &claim, paddedOrdinal) {
-			return false
+		if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+			if !found ||
+				volume.PersistentVolumeClaim == nil ||
+				volume.PersistentVolumeClaim.ClaimName !=
+					GetPersistentVolumeClaimNameOrdinal(nodeset, &claim, paddedOrdinal) {
+				return false
+			}
+		} else {
+			if !found ||
+				volume.PersistentVolumeClaim == nil ||
+				volume.PersistentVolumeClaim.ClaimName !=
+					GetPersistentVolumeClaimNameNodeName(nodeset, &claim, pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname]) {
+				return false
+			}
 		}
 	}
 	return true
@@ -250,14 +262,21 @@ func IsStorageMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
 // returned PersistentVolumeClaims are each constructed with a the name specific to the Pod. This name is determined
 // by GetPersistentVolumeClaimName.
 func GetPersistentVolumeClaims(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) map[string]corev1.PersistentVolumeClaim {
-	ordinal := GetOrdinal(pod)
-	paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
+	var paddedOrdinal string
+	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		ordinal := GetOrdinal(pod)
+		paddedOrdinal = GetPaddedOrdinal(nodeset, ordinal)
+	}
 	templates := nodeset.Spec.VolumeClaimTemplates
 	selectorLabels := labels.NewBuilder().WithWorkerSelectorLabels(nodeset).Build()
 	claims := make(map[string]corev1.PersistentVolumeClaim, len(templates))
 	for i := range templates {
 		claim := templates[i].DeepCopy()
-		claim.Name = GetPersistentVolumeClaimNameOrdinal(nodeset, claim, paddedOrdinal)
+		if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+			claim.Name = GetPersistentVolumeClaimNameOrdinal(nodeset, claim, paddedOrdinal)
+		} else {
+			claim.Name = GetPersistentVolumeClaimNameNodeName(nodeset, claim, pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname])
+		}
 		claim.Namespace = nodeset.Namespace
 		if claim.Labels != nil {
 			maps.Copy(claim.Labels, selectorLabels)
@@ -274,6 +293,13 @@ func GetPersistentVolumeClaims(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) 
 func GetPersistentVolumeClaimNameOrdinal(nodeset *slinkyv1beta1.NodeSet, claim *corev1.PersistentVolumeClaim, paddedOrdinal string) string {
 	// NOTE: This name format is used by the heuristics for zone spreading in ChooseZoneForVolume
 	return fmt.Sprintf("%s-%s-%s", claim.Name, nodeset.Name, paddedOrdinal)
+}
+
+// GetPersistentVolumeClaimNameNodeName gets the name of PersistentVolumeClaim for a Pod with a node name. claim
+// must be a PersistentVolumeClaim from nodeset's VolumeClaims template.
+func GetPersistentVolumeClaimNameNodeName(nodeset *slinkyv1beta1.NodeSet, claim *corev1.PersistentVolumeClaim, nodeName string) string {
+	// NOTE: This name format is used by the heuristics for zone spreading in ChooseZoneForVolume
+	return fmt.Sprintf("%s-%s-%s", claim.Name, nodeset.Name, nodeName)
 }
 
 // SetOwnerReferences modifies the object with all NodeSets as non-controller owners.
