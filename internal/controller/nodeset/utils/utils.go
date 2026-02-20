@@ -34,7 +34,7 @@ func NewNodeSetPod(
 	controllerRef := metav1.NewControllerRef(nodeset, slinkyv1beta1.NodeSetGVK)
 	podTemplate := builder.New(client).BuildWorkerPodTemplate(nodeset, controller)
 	pod, _ := k8scontroller.GetPodFromTemplate(&podTemplate, nodeset, controllerRef)
-	pod.Name = GetPodName(nodeset, ordinal)
+	pod.Name = GetOrdinalPodName(nodeset, ordinal)
 	initIdentity(nodeset, pod)
 	UpdateStorage(nodeset, pod)
 
@@ -71,7 +71,7 @@ func initIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 func UpdateIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 	ordinal := GetOrdinal(pod)
 	paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
-	pod.Name = GetPodName(nodeset, ordinal)
+	pod.Name = GetOrdinalPodName(nodeset, ordinal)
 	pod.Namespace = nodeset.Namespace
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string)
@@ -202,8 +202,8 @@ func GetPaddedOrdinal(nodeset *slinkyv1beta1.NodeSet, ordinal int) string {
 	return fmt.Sprintf(format, ordinal)
 }
 
-// GetPodName gets the name of nodeset's child Pod with an ordinal index of ordinal
-func GetPodName(nodeset *slinkyv1beta1.NodeSet, ordinal int) string {
+// GetOrdinalPodName gets the name of nodeset's child Pod with an ordinal index of ordinal
+func GetOrdinalPodName(nodeset *slinkyv1beta1.NodeSet, ordinal int) string {
 	paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
 	return fmt.Sprintf("%s-%s", nodeset.Name, paddedOrdinal)
 }
@@ -224,7 +224,7 @@ func IsIdentityMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
 	parent, ordinal := GetParentNameAndOrdinal(pod)
 	return ordinal >= 0 &&
 		nodeset.Name == parent &&
-		pod.Name == GetPodName(nodeset, ordinal) &&
+		pod.Name == GetOrdinalPodName(nodeset, ordinal) &&
 		pod.Namespace == nodeset.Namespace &&
 		pod.Labels[slinkyv1beta1.LabelNodeSetPodName] == pod.Name
 }

@@ -294,7 +294,7 @@ func TestGetParentNameAndOrdinal(t *testing.T) {
 	}
 }
 
-func TestGetPodName(t *testing.T) {
+func TestOrdinalGetPodName(t *testing.T) {
 	type args struct {
 		nodeset *slinkyv1beta1.NodeSet
 		ordinal int
@@ -323,8 +323,8 @@ func TestGetPodName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetPodName(tt.args.nodeset, tt.args.ordinal); got != tt.want {
-				t.Errorf("GetPodName() = %v, want %v", got, tt.want)
+			if got := GetOrdinalPodName(tt.args.nodeset, tt.args.ordinal); got != tt.want {
+				t.Errorf("GetOrdinalPodName() = %v, want %v", got, tt.want)
 			}
 		})
 	}
