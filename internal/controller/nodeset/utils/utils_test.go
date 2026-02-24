@@ -4,6 +4,8 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -11,9 +13,14 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/builder/labels"
@@ -106,6 +113,23 @@ func newPVC(name string) corev1.PersistentVolumeClaim {
 			},
 		},
 	}
+}
+
+func newNodeSetWithControllerRef(name, controllerName string, uid types.UID) *slinkyv1beta1.NodeSet {
+	ns := newNodeSet(name)
+	ns.UID = uid
+	ns.Spec.ControllerRef = slinkyv1beta1.ObjectReference{
+		Namespace: corev1.NamespaceDefault,
+		Name:      controllerName,
+	}
+	return ns
+}
+
+func newSetOwnerReferencesScheme() *runtime.Scheme {
+	sch := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(sch))
+	utilruntime.Must(slinkyv1beta1.AddToScheme(sch))
+	return sch
 }
 
 func TestIsPodFromNodeSet(t *testing.T) {
@@ -537,6 +561,123 @@ func TestGetPersistentVolumeClaimName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := GetPersistentVolumeClaimName(tt.args.nodeset, tt.args.claim, tt.args.paddedOrdinal); got != tt.want {
 				t.Errorf("GetPersistentVolumeClaimName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetOwnerReferences(t *testing.T) {
+	sch := newSetOwnerReferencesScheme()
+	listErr := errors.New("list failed")
+
+	tests := []struct {
+		name        string
+		client      client.Client
+		object      metav1.Object
+		clusterName string
+		wantErr     bool
+		wantRefs    int
+	}{
+		{
+			name: "no NodeSets in cluster",
+			client: fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects().
+				Build(),
+			object:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Namespace: corev1.NamespaceDefault}},
+			clusterName: "my-cluster",
+			wantErr:     false,
+			wantRefs:    0,
+		},
+		{
+			name: "one NodeSet matching cluster name",
+			client: fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects(newNodeSetWithControllerRef("nodeset-a", "my-cluster", "uid-a")).
+				Build(),
+			object:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Namespace: corev1.NamespaceDefault}},
+			clusterName: "my-cluster",
+			wantErr:     false,
+			wantRefs:    1,
+		},
+		{
+			name: "multiple NodeSets matching cluster name",
+			client: fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects(
+					newNodeSetWithControllerRef("nodeset-a", "my-cluster", "uid-a"),
+					newNodeSetWithControllerRef("nodeset-b", "my-cluster", "uid-b"),
+				).
+				Build(),
+			object:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Namespace: corev1.NamespaceDefault}},
+			clusterName: "my-cluster",
+			wantErr:     false,
+			wantRefs:    2,
+		},
+		{
+			name: "NodeSets with different controller refs, only matching ones added",
+			client: fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects(
+					newNodeSetWithControllerRef("nodeset-a", "my-cluster", "uid-a"),
+					newNodeSetWithControllerRef("nodeset-b", "other-cluster", "uid-b"),
+				).
+				Build(),
+			object:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Namespace: corev1.NamespaceDefault}},
+			clusterName: "my-cluster",
+			wantErr:     false,
+			wantRefs:    1,
+		},
+		{
+			name: "no NodeSets match cluster name",
+			client: fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects(newNodeSetWithControllerRef("nodeset-a", "other-cluster", "uid-a")).
+				Build(),
+			object:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Namespace: corev1.NamespaceDefault}},
+			clusterName: "my-cluster",
+			wantErr:     false,
+			wantRefs:    0,
+		},
+		{
+			name: "List returns error",
+			client: fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects(newNodeSetWithControllerRef("nodeset-a", "my-cluster", "uid-a")).
+				WithInterceptorFuncs(interceptor.Funcs{
+					List: func(_ context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+						return listErr
+					},
+				}).
+				Build(),
+			object:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Namespace: corev1.NamespaceDefault}},
+			clusterName: "my-cluster",
+			wantErr:     true,
+			wantRefs:    0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			err := SetOwnerReferences(tt.client, ctx, tt.object, tt.clusterName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetOwnerReferences() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			refs := tt.object.GetOwnerReferences()
+			if len(refs) != tt.wantRefs {
+				t.Errorf("SetOwnerReferences() owner refs count = %v, want %v", len(refs), tt.wantRefs)
+			}
+			for _, ref := range refs {
+				if ref.Controller != nil && *ref.Controller {
+					t.Errorf("SetOwnerReferences() set controller=true; expected non-controller owner ref")
+				}
+				if ref.BlockOwnerDeletion == nil || !*ref.BlockOwnerDeletion {
+					t.Errorf("SetOwnerReferences() expected BlockOwnerDeletion=true")
+				}
 			}
 		})
 	}
