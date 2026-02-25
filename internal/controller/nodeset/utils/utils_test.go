@@ -152,7 +152,7 @@ func TestIsPodFromNodeSet(t *testing.T) {
 			name: "From NodeSet",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want: true,
 		},
@@ -160,7 +160,7 @@ func TestIsPodFromNodeSet(t *testing.T) {
 			name: "Not From NodeSet",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
 			},
 			want: false,
 		},
@@ -191,14 +191,14 @@ func TestGetOrdinal(t *testing.T) {
 		{
 			name: "foo-0",
 			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod: NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want: 0,
 		},
 		{
 			name: "bar-1",
 			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+				pod: NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
 			},
 			want: 1,
 		},
@@ -230,7 +230,7 @@ func TestGetParentNameAndOrdinal(t *testing.T) {
 		{
 			name: "foo-0",
 			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod: NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want:  "foo",
 			want1: 0,
@@ -238,7 +238,7 @@ func TestGetParentNameAndOrdinal(t *testing.T) {
 		{
 			name: "bar-1",
 			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+				pod: NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
 			},
 			want:  "bar",
 			want1: 1,
@@ -310,14 +310,14 @@ func TestGetNodeName(t *testing.T) {
 		{
 			name: "foo-0",
 			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod: NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want: "foo-0",
 		},
 		{
 			name: "bar-1",
 			args: args{
-				pod: NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+				pod: NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
 			},
 			want: "bar-1",
 		},
@@ -350,7 +350,7 @@ func TestIsIdentityMatch(t *testing.T) {
 			name: "Match",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want: true,
 		},
@@ -358,7 +358,7 @@ func TestIsIdentityMatch(t *testing.T) {
 			name: "Not Match",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
 			},
 			want: false,
 		},
@@ -391,7 +391,7 @@ func TestIsStorageMatch(t *testing.T) {
 			name: "Match",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want: true,
 		},
@@ -399,7 +399,7 @@ func TestIsStorageMatch(t *testing.T) {
 			name: "Not Match",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("bar"), controller, 1, ""),
 			},
 			want: false,
 		},
@@ -445,7 +445,7 @@ func TestGetPersistentVolumeClaims(t *testing.T) {
 				}
 				return args{
 					nodeset: nodeset,
-					pod:     NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, ""),
+					pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, ""),
 				}
 			}(),
 			want: map[string]corev1.PersistentVolumeClaim{},
@@ -454,7 +454,7 @@ func TestGetPersistentVolumeClaims(t *testing.T) {
 			name: "With Claims",
 			args: args{
 				nodeset: newNodeSet("foo"),
-				pod:     NewNodeSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
+				pod:     NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, ""),
 			},
 			want: map[string]corev1.PersistentVolumeClaim{
 				"datadir": {

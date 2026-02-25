@@ -23,8 +23,8 @@ import (
 	"github.com/SlinkyProject/slurm-operator/internal/utils/historycontrol"
 )
 
-// NewNodeSetPod returns a new Pod conforming to the nodeset's Spec with an identity generated from ordinal.
-func NewNodeSetPod(
+// NewNodeSetStatefulSetPod returns a new Pod conforming to the nodeset's Spec with an identity generated from ordinal.
+func NewNodeSetStatefulSetPod(
 	client client.Client,
 	nodeset *slinkyv1beta1.NodeSet,
 	controller *slinkyv1beta1.Controller,

@@ -670,7 +670,7 @@ func (r *NodeSetReconciler) newNodeSetPod(
 		return nil, err
 	}
 
-	pod := nodesetutils.NewNodeSetPod(client, nodeset, controller, ordinal, revisionHash)
+	pod := nodesetutils.NewNodeSetStatefulSetPod(client, nodeset, controller, ordinal, revisionHash)
 
 	return pod, nil
 }
