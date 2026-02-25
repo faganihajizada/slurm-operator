@@ -158,7 +158,7 @@ Kubernetes: `>= 1.29.0-0`
 | partitions.all.enabled | bool | `true` | Enable this partition to be defined in Slurm config. |
 | partitions.all.nodesets | list | `["ALL"]` | List of NodeSets to be associated with this partition. Ref: https://slurm.schedmd.com/slurm.conf.html#OPT_Nodes_1 |
 | priorityClass.create | bool | `true` | The priority class will be created when true. |
-| priorityClass.description | string | `nil` | Description for the PriorityClass. |
+| priorityClass.description | string | `nil` | The description value upon creation. |
 | priorityClass.name | string | `"slurm-system-critical"` | The name of the priority class to (create and) use. |
 | priorityClass.preemptionPolicy | string | `"PreemptLowerPriority"` | The preemption policy upon creation. One of: `PreemptLowerPriority`; `Never`. |
 | priorityClass.value | int | `1000000000` | The priority value upon creation. |

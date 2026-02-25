@@ -28,7 +28,7 @@ priorityClass:
   create: true
   # -- The name of the priority class to (create and) use.
   name: slurm-system-critical
-  # -- Description for the PriorityClass.
+  # -- The description value upon creation.
   description: null
   # -- The priority value upon creation.
   value: 1000000000
