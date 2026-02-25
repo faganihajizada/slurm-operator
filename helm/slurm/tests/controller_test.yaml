@@ -115,7 +115,7 @@ tests:
     asserts:
       - equal:
           path: spec.jwksKeyRef.name
-          value: test-release-slurm-auth-jwkskeys
+          value: test-release-slurm-auth-jwks
       - equal:
           path: spec.jwksKeyRef.key
           value: jwks.json

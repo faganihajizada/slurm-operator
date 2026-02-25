@@ -70,7 +70,7 @@ jwksKeys:
   enabled: false
   # -- (configMapKeySelector) Reference to the configMap.
   configMapRef: {}
-    # name: slurm-auth-jwkskeys
+    # name: slurm-auth-jwks
     # key: jwks.json
 
 # -- The cluster name, which uniquely identifies the Slurm cluster.
