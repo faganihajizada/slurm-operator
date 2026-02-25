@@ -6,13 +6,6 @@ templates:
 release:
   name: test-release
   namespace: test-namespace
-kubernetesProvider:
-  scheme:
-    "scheduling.k8s.io/v1/PriorityClass":
-      gvr:
-        version: "v1"
-        resource: "priorityclasses"
-      namespaced: false
 tests:
   - it: should not create priority class
     template: priorityclass/priorityclass.yaml
