@@ -157,8 +157,9 @@ Kubernetes: `>= 1.29.0-0`
 | partitions.all.configMap | map[string]string \| map[string][]string | `{"Default":"YES","MaxTime":"UNLIMITED","State":"UP"}` | The Slurm partition configuration options added to the partition line. If `config` is not empty, it takes precedence. Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION |
 | partitions.all.enabled | bool | `true` | Enable this partition to be defined in Slurm config. |
 | partitions.all.nodesets | list | `["ALL"]` | List of NodeSets to be associated with this partition. Ref: https://slurm.schedmd.com/slurm.conf.html#OPT_Nodes_1 |
-| priorityClass.create | bool | `true` | The priority class will be created when true. |
-| priorityClass.description | string | `nil` | The description value upon creation. |
+| priorityClass.create | bool | `false` | The priority class will be created when true. |
+| priorityClass.description | string | `nil` | The description upon creation. |
+| priorityClass.enabled | bool | `false` | Enables use of the named priorityClass to be applied to all Slurm pods. |
 | priorityClass.name | string | `"slurm-system-critical"` | The name of the priority class to (create and) use. |
 | priorityClass.preemptionPolicy | string | `"PreemptLowerPriority"` | The preemption policy upon creation. One of: `PreemptLowerPriority`; `Never`. |
 | priorityClass.value | int | `1000000000` | The priority value upon creation. |

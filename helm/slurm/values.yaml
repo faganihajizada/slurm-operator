@@ -24,11 +24,13 @@ imagePullPolicy: IfNotPresent
 # Configure the priority class used by all Slurm components.
 # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
 priorityClass:
+  # -- Enables use of the named priorityClass to be applied to all Slurm pods.
+  enabled: false
   # -- The priority class will be created when true.
-  create: true
+  create: false
   # -- The name of the priority class to (create and) use.
   name: slurm-system-critical
-  # -- The description value upon creation.
+  # -- The description upon creation.
   description: null
   # -- The priority value upon creation.
   value: 1000000000

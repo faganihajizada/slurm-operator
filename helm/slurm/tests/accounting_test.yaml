@@ -141,3 +141,41 @@ tests:
   - equal:
       path: spec.jwksKeyRef.key
       value: jwks.json
+
+- it: should not use priority class
+  set:
+    priorityClass:
+      enabled: false
+      name: slurm-priorityclass
+    accounting:
+      enabled: true
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: ""
+
+- it: should use priority class
+  set:
+    priorityClass:
+      enabled: true
+      name: slurm-priorityclass
+    accounting:
+      enabled: true
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: slurm-priorityclass
+
+- it: should override priority class
+  set:
+    priorityClass:
+      enabled: false
+      name: slurm-priorityclass
+    accounting:
+      enabled: true
+      podSpec:
+        priorityClassName: foo-priorityclass
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: foo-priorityclass

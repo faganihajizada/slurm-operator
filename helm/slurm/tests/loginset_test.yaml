@@ -133,3 +133,44 @@ tests:
   - equal:
       path: spec.template.spec.topologySpreadConstraints[0].labelSelector.matchLabels.foo
       value: bar
+
+- it: should not use priority class
+  set:
+    priorityClass:
+      enabled: false
+      name: slurm-priorityclass
+    loginsets:
+      slinky:
+        enabled: true
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: ""
+
+- it: should use priority class
+  set:
+    priorityClass:
+      enabled: true
+      name: slurm-priorityclass
+    loginsets:
+      slinky:
+        enabled: true
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: slurm-priorityclass
+
+- it: should override priority class
+  set:
+    priorityClass:
+      enabled: false
+      name: slurm-priorityclass
+    loginsets:
+      slinky:
+        enabled: true
+        podSpec:
+          priorityClassName: foo-priorityclass
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: foo-priorityclass

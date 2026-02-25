@@ -165,3 +165,36 @@ tests:
   - equal:
       path: .spec.template.metadata.annotations.baz
       value: qux
+
+- it: should not use priority class
+  set:
+    priorityClass:
+      enabled: false
+      name: slurm-priorityclass
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: ""
+
+- it: should use priority class
+  set:
+    priorityClass:
+      enabled: true
+      name: slurm-priorityclass
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: slurm-priorityclass
+
+- it: should override priority class
+  set:
+    priorityClass:
+      enabled: false
+      name: slurm-priorityclass
+    restapi:
+      podSpec:
+        priorityClassName: foo-priorityclass
+  asserts:
+  - equal:
+      path: spec.template.spec.priorityClassName
+      value: foo-priorityclass
