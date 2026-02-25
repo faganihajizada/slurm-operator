@@ -96,7 +96,7 @@ Kubernetes: `>= 1.29.0-0`
 | jwksKeys.configMapRef | configMapKeySelector | `{}` | Reference to the configMap. |
 | jwksKeys.enabled | bool | `false` | Enable use of JWKS file. |
 | jwtKey | object | `{"annotations":{},"create":true,"secretRef":{}}` | Slurm cluster JWT HS256 authentication key. Ref: https://slurm.schedmd.com/authentication.html#jwt |
-| jwtKey.annotations | object | `{}` | Additional annotations to add to the secret. |
+| jwtKey.annotations | object | `{}` | Annotations to add to the secret upon creation. |
 | jwtKey.create | bool | `true` | The secret will be created when true. |
 | jwtKey.secretRef | secretKeyRef | `{}` | Reference to the secret. |
 | loginsets.slinky.enabled | bool | `false` | Enable use of this LoginSet. |
@@ -181,7 +181,7 @@ Kubernetes: `>= 1.29.0-0`
 | restapi.slurmrestd.image | string|object | `{"repository":"ghcr.io/slinkyproject/slurmrestd","tag":"25.11-ubuntu24.04"}` | The image to use. Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names |
 | restapi.slurmrestd.resources | object | `{}` | The container resource limits and requests. Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container |
 | slurmKey | object | `{"annotations":{},"create":true,"secretRef":{}}` | Slurm shared authentication key. Ref: https://slurm.schedmd.com/authentication.html#slurm |
-| slurmKey.annotations | object | `{}` | Additional annotations to add to the secret. |
+| slurmKey.annotations | object | `{}` | Annotations to add to the secret upon creation. |
 | slurmKey.create | bool | `true` | The secret will be created when true. |
 | slurmKey.secretRef | secretKeyRef | `{}` | Reference to the secret. |
 | sssd.conf | string | `"[sssd]\nconfig_file_version = 2\nservices = nss,pam\ndomains = DEFAULT\n\n[nss]\nfilter_groups = root,slurm\nfilter_users = root,slurm\n\n[pam]\n\n[domain/DEFAULT]\nauth_provider = ldap\nid_provider = ldap\nldap_uri = ldap://ldap.example.com\nldap_search_base = dc=example,dc=com\nldap_user_search_base = ou=Users,dc=example,dc=com\nldap_group_search_base = ou=Groups,dc=example,dc=com\n"` | The `sssd.conf` by raw file. Ref: https://man.archlinux.org/man/sssd.conf.5 |

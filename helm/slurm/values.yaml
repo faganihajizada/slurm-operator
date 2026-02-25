@@ -42,8 +42,9 @@ priorityClass:
 slurmKey:
   # -- The secret will be created when true.
   create: true
-  # -- Additional annotations to add to the secret.
+  # -- Annotations to add to the secret upon creation.
   annotations: {}
+    # helm.sh/resource-policy: keep
   # -- (secretKeyRef) Reference to the secret.
   secretRef: {}
     # name: slurm-auth-slurm
@@ -54,8 +55,9 @@ slurmKey:
 jwtKey:
   # -- The secret will be created when true.
   create: true
-  # -- Additional annotations to add to the secret.
+  # -- Annotations to add to the secret upon creation.
   annotations: {}
+    # helm.sh/resource-policy: keep
   # -- (secretKeyRef) Reference to the secret.
   secretRef: {}
     # name: slurm-auth-jwths256
