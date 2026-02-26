@@ -969,7 +969,7 @@ func (r *NodeSetReconciler) doPodScaleIn(
 	// Note that if the labels on a pod/nodeset change in a way that the pod gets
 	// orphaned, the nodeset will only wake up after the expectations have
 	// expired even if other pods are deleted.
-	if err := r.expectations.ExpectDeletions(logger, key, getPodKeys(podsToDelete)); err != nil {
+	if err := r.expectations.ExpectDeletions(logger, key, getPodKeys(podsToDelete[:numDelete])); err != nil {
 		return err
 	}
 	_, err := utils.SlowStartBatch(numDelete, utils.SlowStartInitialBatchSize, func(index int) error {
