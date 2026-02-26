@@ -705,64 +705,6 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 	}
 }
 
-func TestNodeSetReconciler_doPodScaleOut(t *testing.T) {
-	type fields struct {
-		Client    client.Client
-		ClientMap *clientmap.ClientMap
-	}
-	type args struct {
-		ctx          context.Context
-		nodeset      *slinkyv1beta1.NodeSet
-		pods         []*corev1.Pod
-		podsToCreate []*corev1.Pod
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodScaleOut(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.podsToCreate); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.doPodScaleOut() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestNodeSetReconciler_doPodScaleIn(t *testing.T) {
-	type fields struct {
-		Client    client.Client
-		ClientMap *clientmap.ClientMap
-	}
-	type args struct {
-		ctx          context.Context
-		nodeset      *slinkyv1beta1.NodeSet
-		podsToDelete []*corev1.Pod
-		podsToKeep   []*corev1.Pod
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodScaleIn(tt.args.ctx, tt.args.nodeset, tt.args.podsToDelete, tt.args.podsToKeep); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.doPodScaleIn() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestNodeSetReconciler_processCondemned(t *testing.T) {
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{
