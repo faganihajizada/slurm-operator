@@ -754,7 +754,15 @@ func (r *NodeSetReconciler) syncNodeSet(
 			podsToDelete = append(podsToDelete, podsToDeleteOnNode...)
 		}
 		if len(nodesNeedingDaemonPods) > 0 {
-			return r.doPodScaleOut(ctx, nodeset, pods, nodesNeedingDaemonPods, len(nodesNeedingDaemonPods), hash)
+			podsToCreate := make([]*corev1.Pod, len(nodesNeedingDaemonPods))
+			for i := range len(nodesNeedingDaemonPods) {
+				pod, err := r.newNodeSetPodDaemon(r.Client, ctx, nodeset, nodesNeedingDaemonPods[i], hash)
+				if err != nil {
+					return err
+				}
+				podsToCreate[i] = pod
+			}
+			return r.doPodScaleOut(ctx, nodeset, pods, podsToCreate)
 		}
 		if len(podsToDelete) > 0 {
 			return r.doPodScaleIn(ctx, nodeset, podsToDelete, []*corev1.Pod{})
@@ -767,8 +775,26 @@ func (r *NodeSetReconciler) syncNodeSet(
 		diff := len(pods) - replicaCount
 		if diff < 0 {
 			diff = -diff
+
+			podsToCreate := make([]*corev1.Pod, diff)
+			usedOrdinals := set.New[int]()
+			for _, pod := range pods {
+				usedOrdinals.Insert(nodesetutils.GetOrdinal(pod))
+			}
+			ordinal := 0
+			for i := range diff {
+				for usedOrdinals.Has(ordinal) {
+					ordinal++
+				}
+				pod, err := r.newNodeSetPodOrdinal(r.Client, ctx, nodeset, ordinal, hash)
+				if err != nil {
+					return err
+				}
+				usedOrdinals.Insert(ordinal)
+				podsToCreate[i] = pod
+			}
 			logger.V(2).Info("Too few NodeSet pods", "need", replicaCount, "creating", diff)
-			return r.doPodScaleOut(ctx, nodeset, pods, []string{}, diff, hash)
+			return r.doPodScaleOut(ctx, nodeset, pods, podsToCreate)
 		}
 
 		if diff > 0 {
@@ -788,9 +814,7 @@ func (r *NodeSetReconciler) doPodScaleOut(
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
 	pods []*corev1.Pod,
-	possibleNodes []string,
-	numCreate int,
-	hash string,
+	podsToCreate []*corev1.Pod,
 ) error {
 	logger := log.FromContext(ctx)
 	key := objectutils.KeyFunc(nodeset)
@@ -803,36 +827,7 @@ func (r *NodeSetReconciler) doPodScaleOut(
 		return err
 	}
 
-	numCreate = mathutils.Clamp(numCreate, 0, burstReplicas)
-
-	usedOrdinals := set.New[int]()
-	for _, pod := range pods {
-		usedOrdinals.Insert(nodesetutils.GetOrdinal(pod))
-	}
-
-	podsToCreate := make([]*corev1.Pod, numCreate)
-	ordinal := 0
-	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
-		for i := range numCreate {
-			for usedOrdinals.Has(ordinal) {
-				ordinal++
-			}
-			pod, err := r.newNodeSetPodOrdinal(r.Client, ctx, nodeset, ordinal, hash)
-			if err != nil {
-				return err
-			}
-			usedOrdinals.Insert(ordinal)
-			podsToCreate[i] = pod
-		}
-	} else {
-		for i := range len(possibleNodes) {
-			pod, err := r.newNodeSetPodDaemon(r.Client, ctx, nodeset, possibleNodes[i], hash)
-			if err != nil {
-				return err
-			}
-			podsToCreate[i] = pod
-		}
-	}
+	numCreate := mathutils.Clamp(len(podsToCreate), 0, burstReplicas)
 
 	// TODO: Track UIDs of creates just like deletes. The problem currently
 	// is we'd need to wait on the result of a create to record the pod's

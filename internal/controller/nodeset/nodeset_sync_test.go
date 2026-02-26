@@ -711,12 +711,10 @@ func TestNodeSetReconciler_doPodScaleOut(t *testing.T) {
 		ClientMap *clientmap.ClientMap
 	}
 	type args struct {
-		ctx           context.Context
-		nodeset       *slinkyv1beta1.NodeSet
-		pods          []*corev1.Pod
-		possibleNodes []string
-		numCreate     int
-		hash          string
+		ctx          context.Context
+		nodeset      *slinkyv1beta1.NodeSet
+		pods         []*corev1.Pod
+		podsToCreate []*corev1.Pod
 	}
 	tests := []struct {
 		name    string
@@ -729,7 +727,7 @@ func TestNodeSetReconciler_doPodScaleOut(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodScaleOut(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.possibleNodes, tt.args.numCreate, tt.args.hash); (err != nil) != tt.wantErr {
+			if err := r.doPodScaleOut(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.podsToCreate); (err != nil) != tt.wantErr {
 				t.Errorf("NodeSetReconciler.doPodScaleOut() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
