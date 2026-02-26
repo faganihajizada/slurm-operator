@@ -320,6 +320,7 @@ func TestNodeSetReconciler_syncNodeSetStatus(t *testing.T) {
 					ReadyReplicas:     2,
 					AvailableReplicas: 2,
 					UpdatedReplicas:   2,
+					Desired:           2,
 					SlurmIdle:         2,
 					NodeSetHash:       "12345",
 					CollisionCount:    ptr.To[int32](0),
@@ -378,6 +379,7 @@ func TestNodeSetReconciler_syncNodeSetStatus(t *testing.T) {
 				wantStatus: &slinkyv1beta1.NodeSetStatus{
 					Replicas:            2,
 					UnavailableReplicas: 2,
+					Desired:             2,
 					NodeSetHash:         "12345",
 					CollisionCount:      ptr.To[int32](0),
 					Selector:            "app.kubernetes.io/instance=foo,app.kubernetes.io/name=slurmd",
@@ -417,14 +419,18 @@ func TestNodeSetReconciler_calculateReplicaStatus(t *testing.T) {
 		updateRevision  *appsv1.ControllerRevision
 	}
 	tests := []struct {
-		name string
-		args args
-		want replicaStatus
+		name    string
+		args    args
+		want    replicaStatus
+		wantErr bool
+		client  client.Client
 	}{
 		{
-			name: "Empty",
-			args: args{},
-			want: replicaStatus{},
+			name:    "Empty",
+			args:    args{},
+			want:    replicaStatus{},
+			wantErr: false,
+			client:  nil,
 		},
 		{
 			name: "Healthy, up-to-date",
@@ -456,7 +462,10 @@ func TestNodeSetReconciler_calculateReplicaStatus(t *testing.T) {
 				Ready:     2,
 				Current:   2,
 				Updated:   2,
+				Desired:   2,
 			},
+			wantErr: false,
+			client:  nil,
 		},
 		{
 			name: "Created, need update",
@@ -486,13 +495,49 @@ func TestNodeSetReconciler_calculateReplicaStatus(t *testing.T) {
 				Replicas:    2,
 				Unavailable: 2,
 				Current:     2,
+				Desired:     2,
 			},
+			wantErr: false,
+			client:  nil,
+		},
+		{
+			name: "DaemonSet getDesiredNodeCountForDaemonSet list error",
+			args: func() args {
+				nodeset := newNodeSet("foo", controller.Name, 2)
+				nodeset.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+				return args{
+					nodeset:         nodeset,
+					pods:            []*corev1.Pod{},
+					currentRevision: nil,
+					updateRevision:  nil,
+				}
+			}(),
+			want:    replicaStatus{},
+			wantErr: true,
+			client: fake.NewClientBuilder().
+				WithInterceptorFuncs(interceptor.Funcs{
+					List: func(ctx context.Context, client client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						return errors.New("list nodes failed")
+					},
+				}).
+				Build(),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := newNodeSetController(fake.NewFakeClient(), nil)
-			got := r.calculateReplicaStatus(tt.args.nodeset, tt.args.pods, tt.args.currentRevision, tt.args.updateRevision)
+			c := tt.client
+			if c == nil {
+				c = fake.NewFakeClient()
+			}
+			r := newNodeSetController(c, nil)
+			got, err := r.calculateReplicaStatus(context.TODO(), tt.args.nodeset, tt.args.pods, tt.args.currentRevision, tt.args.updateRevision)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.calculateReplicaStatus() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("unexpected status (-want,+got):\n%s", diff)
 			}

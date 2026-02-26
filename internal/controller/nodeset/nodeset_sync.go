@@ -556,6 +556,21 @@ func (r *NodeSetReconciler) EnqueueNodeSetAfter(nodeset *slinkyv1beta1.NodeSet, 
 	durationStore.Push(key, after)
 }
 
+func (r *NodeSetReconciler) getDesiredNodeCountForDaemonSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) (int32, error) {
+	nodeList := &corev1.NodeList{}
+	if err := r.List(ctx, nodeList); err != nil {
+		return 0, err
+	}
+	var count int32
+	for i := range nodeList.Items {
+		shouldRun, _ := r.NodeShouldRunDaemonPod(ctx, &nodeList.Items[i], nodeset)
+		if shouldRun {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *NodeSetReconciler) getNodesToDaemonPods(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, includeDeletedTerminal bool) map[string][]*corev1.Pod {
 	// Group Pods by Node name.
 	nodeToDaemonPods := make(map[string][]*corev1.Pod)

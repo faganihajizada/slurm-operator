@@ -265,6 +265,12 @@ type NodeSetStatus struct {
 	// +optional
 	UnavailableReplicas int32 `json:"unavailableReplicas,omitempty"`
 
+	// Desired is the number of nodes that should be running a NodeSet pod.
+	// In DaemonSet scaling mode this is the number of nodes matching the node selector and tolerations.
+	// In StatefulSet scaling mode this is the number of replicas.
+	// +optional
+	Desired int32 `json:"desired,omitempty"`
+
 	// The number of NodeSet pods that are running and are in the Slurm IDLE
 	// state. IDLE means the Slurm nodes is not ALLOCATED or MIXED, hence is not
 	// allocated any Slurm jobs, nor doing work.
@@ -319,6 +325,7 @@ type NodeSetStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=nodesets;nss;slurmd
 // +kubebuilder:subresource:scale:specpath=".spec.replicas",statuspath=".status.replicas",selectorpath=".status.selector"
+// +kubebuilder:printcolumn:name="DESIRED",type="integer",JSONPath=".status.desired",priority=0,description="The number of nodes match the node selector and tolerations (DaemonSet mode) or replicas (StatefulSet mode)."
 // +kubebuilder:printcolumn:name="REPLICAS",type="integer",JSONPath=".status.replicas",priority=0,description="The current number of pods."
 // +kubebuilder:printcolumn:name="UPDATED",type="integer",JSONPath=".status.updatedReplicas",priority=0,description="The number of pods updated."
 // +kubebuilder:printcolumn:name="READY",type="integer",JSONPath=".status.readyReplicas",priority=0,description="The number of pods ready."
