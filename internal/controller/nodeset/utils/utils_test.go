@@ -37,9 +37,12 @@ func newNodeSet(name string) *slinkyv1beta1.NodeSet {
 	return newNodeSetWithVolumes(name, petMounts, podMounts)
 }
 
-func newNodeSetDaemonset(name string) *slinkyv1beta1.NodeSet {
+func newNodeSetDaemonset(name string, hostname string) *slinkyv1beta1.NodeSet {
 	ns := newNodeSet(name)
 	ns.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	if hostname != "" {
+		ns.Spec.Template.PodSpecWrapper.Hostname = hostname
+	}
 	return ns
 }
 
@@ -372,9 +375,9 @@ func TestIsIdentityMatch(t *testing.T) {
 		{
 			name: "Match (Daemonset)",
 			args: args{
-				nodeset: newNodeSetDaemonset("foo"),
+				nodeset: newNodeSetDaemonset("foo", ""),
 				pod: func() *corev1.Pod {
-					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", "")
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo", ""), controller, "node-1", "")
 					pod.Name = "foo-abc123"
 					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
 					return pod
@@ -385,9 +388,9 @@ func TestIsIdentityMatch(t *testing.T) {
 		{
 			name: "Not Match (Daemonset)",
 			args: args{
-				nodeset: newNodeSetDaemonset("foo"),
+				nodeset: newNodeSetDaemonset("foo", ""),
 				pod: func() *corev1.Pod {
-					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("bar"), controller, "node-1", "")
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("bar", ""), controller, "node-1", "")
 					pod.Name = "bar-abc123"
 					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
 					return pod
@@ -398,9 +401,9 @@ func TestIsIdentityMatch(t *testing.T) {
 		{
 			name: "DaemonSet not match wrong label",
 			args: args{
-				nodeset: newNodeSetDaemonset("foo"),
+				nodeset: newNodeSetDaemonset("foo", ""),
 				pod: func() *corev1.Pod {
-					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", "")
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo", ""), controller, "node-1", "")
 					pod.Name = "foo-abc123"
 					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = "bar-abc123"
 					return pod
@@ -425,7 +428,7 @@ func TestNewNodeSetDaemonSetPod(t *testing.T) {
 		},
 	}
 	client := fake.NewFakeClient()
-	nodeset := newNodeSetDaemonset("foo")
+	nodeset := newNodeSetDaemonset("foo", "")
 
 	type args struct {
 		nodeName     string
@@ -478,6 +481,7 @@ func TestNewNodeSetDaemonSetPod(t *testing.T) {
 				t.Fatal("NewNodeSetDaemonSetPod() returned nil")
 			}
 			if tt.checkIdentity {
+				wantHostname := getDaemonSetPodHostname(nodeset, tt.args.nodeName)
 				if pod.GenerateName != nodeset.Name+"-" {
 					t.Errorf("GenerateName = %q, want %q", pod.GenerateName, nodeset.Name+"-")
 				}
@@ -487,14 +491,14 @@ func TestNewNodeSetDaemonSetPod(t *testing.T) {
 				if pod.Namespace != nodeset.Namespace {
 					t.Errorf("Namespace = %q, want %q", pod.Namespace, nodeset.Namespace)
 				}
-				if pod.Spec.Hostname != tt.args.nodeName {
-					t.Errorf("Spec.Hostname = %q, want %q", pod.Spec.Hostname, tt.args.nodeName)
+				if pod.Spec.Hostname != wantHostname {
+					t.Errorf("Spec.Hostname = %q, want %q", pod.Spec.Hostname, wantHostname)
 				}
 				if pod.Spec.NodeName != "" {
 					t.Errorf("Spec.NodeName = %q, want empty", pod.Spec.NodeName)
 				}
-				if got := pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname]; got != tt.args.nodeName {
-					t.Errorf("Labels[%s] = %q, want %q", slinkyv1beta1.LabelNodeSetPodHostname, got, tt.args.nodeName)
+				if got := pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname]; got != wantHostname {
+					t.Errorf("Labels[%s] = %q, want %q", slinkyv1beta1.LabelNodeSetPodHostname, got, wantHostname)
 				}
 				if got := pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode]; got != string(slinkyv1beta1.ScalingModeDaemonset) {
 					t.Errorf("Labels[%s] = %q, want %q", slinkyv1beta1.LabelNodeSetScalingMode, got, string(slinkyv1beta1.ScalingModeDaemonset))
@@ -515,13 +519,97 @@ func TestNewNodeSetDaemonSetPod(t *testing.T) {
 						claimNames[v.PersistentVolumeClaim.ClaimName] = true
 					}
 				}
+				podHostname := pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname]
 				for i := range nodeset.Spec.VolumeClaimTemplates {
 					claim := &nodeset.Spec.VolumeClaimTemplates[i]
-					wantName := GetPersistentVolumeClaimNameNodeName(nodeset, claim, tt.args.nodeName)
+					wantName := GetPersistentVolumeClaimNameNodeName(nodeset, claim, podHostname)
 					if !claimNames[wantName] {
 						t.Errorf("missing volume with ClaimName %q", wantName)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestGetDaemonSetPodHostname(t *testing.T) {
+	tests := []struct {
+		name     string
+		nodeset  *slinkyv1beta1.NodeSet
+		nodeName string
+		want     string
+	}{
+		{
+			name:     "Nodeset name and node name combined",
+			nodeset:  newNodeSetDaemonset("foo", ""),
+			nodeName: "node-1",
+			want:     "foo-node-1",
+		},
+		{
+			name:     "Trailing dash on node name is trimmed",
+			nodeset:  newNodeSetDaemonset("foo", ""),
+			nodeName: "node-1-",
+			want:     "foo-node-1",
+		},
+		{
+			name:     "Empty node name",
+			nodeset:  newNodeSetDaemonset("foo", ""),
+			nodeName: "",
+			want:     "foo-",
+		},
+		{
+			name:     "Different nodeset name",
+			nodeset:  newNodeSetDaemonset("my-nodeset", ""),
+			nodeName: "worker-0",
+			want:     "my-nodeset-worker-0",
+		},
+		{
+			name:     "Node name with multiple trailing dashes",
+			nodeset:  newNodeSetDaemonset("foo", ""),
+			nodeName: "node-1---",
+			want:     "foo-node-1--",
+		},
+		{
+			name:     "Single character node name",
+			nodeset:  newNodeSetDaemonset("ns", ""),
+			nodeName: "a",
+			want:     "ns-a",
+		},
+		{
+			name:     "AWS-style FQDN node name uses first label only",
+			nodeset:  newNodeSetDaemonset("foo", ""),
+			nodeName: "node1.us-west-2.compute.internal",
+			want:     "foo-node1",
+		},
+		{
+			name:     "GCP-style internal DNS node name uses first label only",
+			nodeset:  newNodeSetDaemonset("worker", ""),
+			nodeName: "node-2.my-project.us-central1-a.c.gcp-project.internal",
+			want:     "worker-node-2",
+		},
+		{
+			name:     "Azure-style node name uses first label only, trailing dash trimmed",
+			nodeset:  newNodeSetDaemonset("slurm", ""),
+			nodeName: "node-0.abc123.region.azure.internal-",
+			want:     "slurm-node-0",
+		},
+		{
+			name:     "Custom template hostname prefix is used without separator",
+			nodeset:  newNodeSetDaemonset("foo", "slurm-"),
+			nodeName: "node-1",
+			want:     "slurm-node-1",
+		},
+		{
+			name:     "Custom template hostname with FQDN node name uses first label",
+			nodeset:  newNodeSetDaemonset("foo", "worker-"),
+			nodeName: "node-2.my-project.us-central1-a.c.gcp-project.internal",
+			want:     "worker-node-2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getDaemonSetPodHostname(tt.nodeset, tt.nodeName); got != tt.want {
+				t.Errorf("getDaemonSetPodHostname() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -561,25 +649,25 @@ func TestIsStorageMatch(t *testing.T) {
 		{
 			name: "Match (Daemonset)",
 			args: args{
-				nodeset: newNodeSetDaemonset("foo"),
-				pod:     NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", ""),
+				nodeset: newNodeSetDaemonset("foo", ""),
+				pod:     NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo", ""), controller, "node-1", ""),
 			},
 			want: true,
 		},
 		{
 			name: "Not Match (Daemonset)",
 			args: args{
-				nodeset: newNodeSetDaemonset("foo"),
-				pod:     NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("bar"), controller, "node-1", ""),
+				nodeset: newNodeSetDaemonset("foo", ""),
+				pod:     NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("bar", ""), controller, "node-1", ""),
 			},
 			want: false,
 		},
 		{
 			name: "Not Match (Daemonset wrong hostname label)",
 			args: args{
-				nodeset: newNodeSetDaemonset("foo"),
+				nodeset: newNodeSetDaemonset("foo", ""),
 				pod: func() *corev1.Pod {
-					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo"), controller, "node-1", "")
+					pod := NewNodeSetDaemonSetPod(fake.NewFakeClient(), newNodeSetDaemonset("foo", ""), controller, "node-1", "")
 					pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = "node-2"
 					return pod
 				}(),

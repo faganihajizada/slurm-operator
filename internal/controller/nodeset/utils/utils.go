@@ -66,11 +66,12 @@ func NewNodeSetDaemonSetPod(
 	podTemplate := builder.New(client).BuildWorkerPodTemplate(nodeset, controller)
 	pod, _ := k8scontroller.GetPodFromTemplate(&podTemplate, nodeset, controllerRef)
 
-	pod.Spec.Hostname = nodeName
+	// Ensure the hostname is RFC 1178 compliant
+	safeHostname := getDaemonSetPodHostname(nodeset, nodeName)
+	pod.Spec.Hostname = safeHostname
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string)
 	}
-	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = nodeName
 
 	initIdentity(nodeset, pod)
 	UpdateStorage(nodeset, pod)
@@ -92,6 +93,19 @@ func NewNodeSetDaemonSetPod(
 	pod.Spec.Affinity = daemonutils.ReplaceDaemonSetPodNodeNameNodeAffinity(pod.Spec.Affinity, nodeName)
 
 	return pod
+}
+
+func getDaemonSetPodHostname(nodeset *slinkyv1beta1.NodeSet, nodeName string) string {
+	name := nodeName
+	if before, _, ok := strings.Cut(nodeName, "."); ok {
+		name = before
+	}
+	name = strings.TrimSuffix(name, "-")
+	if nodeset.Spec.Template.PodSpecWrapper.Hostname != "" {
+		prefix := strings.TrimSuffix(nodeset.Spec.Template.PodSpecWrapper.Hostname, "-")
+		return fmt.Sprintf("%s-%s", prefix, name)
+	}
+	return fmt.Sprintf("%s-%s", nodeset.Name, name)
 }
 
 func initIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
