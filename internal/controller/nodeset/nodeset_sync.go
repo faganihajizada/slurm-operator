@@ -769,19 +769,16 @@ func (r *NodeSetReconciler) syncNodeSet(
 			nodesNeedingDaemonPods = append(nodesNeedingDaemonPods, nodesNeedingDaemonPodsOnNode...)
 			podsToDelete = append(podsToDelete, podsToDeleteOnNode...)
 		}
-		if len(nodesNeedingDaemonPods) > 0 {
-			podsToCreate := make([]*corev1.Pod, len(nodesNeedingDaemonPods))
-			for i := range len(nodesNeedingDaemonPods) {
-				pod, err := r.newNodeSetPodDaemon(r.Client, ctx, nodeset, nodesNeedingDaemonPods[i], hash)
-				if err != nil {
-					return err
-				}
-				podsToCreate[i] = pod
+		podsToCreate := make([]*corev1.Pod, len(nodesNeedingDaemonPods))
+		for i := range len(nodesNeedingDaemonPods) {
+			pod, err := r.newNodeSetPodDaemon(r.Client, ctx, nodeset, nodesNeedingDaemonPods[i], hash)
+			if err != nil {
+				return err
 			}
-			return r.doPodScale(ctx, nodeset, podsToKeep, nil, podsToCreate)
+			podsToCreate[i] = pod
 		}
-		if len(podsToDelete) > 0 {
-			return r.doPodScale(ctx, nodeset, podsToKeep, podsToDelete, nil)
+		if len(podsToDelete) > 0 || len(podsToCreate) > 0 {
+			return r.doPodScale(ctx, nodeset, podsToKeep, podsToDelete, podsToCreate)
 		}
 	} else {
 		logger.V(2).Info("Processing NodeSet pods for replica scaling")
