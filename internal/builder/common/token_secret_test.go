@@ -51,7 +51,7 @@ func TestBuilder_BuildTokenSecret(t *testing.T) {
 					},
 					Spec: slinkyv1beta1.TokenSpec{
 						Username: "foo",
-						JwtKeyRef: slinkyv1beta1.JwtSecretKeySelector{
+						JwtKeyRef: &slinkyv1beta1.JwtSecretKeySelector{
 							SecretKeySelector: corev1.SecretKeySelector{
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "slurm-jwtkey",
@@ -75,7 +75,7 @@ func TestBuilder_BuildTokenSecret(t *testing.T) {
 					},
 					Spec: slinkyv1beta1.TokenSpec{
 						Username: "foo",
-						JwtKeyRef: slinkyv1beta1.JwtSecretKeySelector{
+						JwtKeyRef: &slinkyv1beta1.JwtSecretKeySelector{
 							SecretKeySelector: corev1.SecretKeySelector{
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "slurm-jwtkey",

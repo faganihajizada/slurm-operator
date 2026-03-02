@@ -269,7 +269,7 @@ func NewToken(name string, jwtKeySecret *corev1.Secret) *slinkyv1beta1.Token {
 		},
 		Spec: slinkyv1beta1.TokenSpec{
 			Username: "slurm",
-			JwtKeyRef: slinkyv1beta1.JwtSecretKeySelector{
+			JwtKeyRef: &slinkyv1beta1.JwtSecretKeySelector{
 				SecretKeySelector: corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: jwtKeySecret.Name,
