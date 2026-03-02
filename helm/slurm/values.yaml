@@ -24,11 +24,13 @@ imagePullPolicy: IfNotPresent
 # Configure the priority class used by all Slurm components.
 # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
 priorityClass:
+  # -- Enables use of the named priorityClass to be applied to all Slurm pods.
+  enabled: false
   # -- The priority class will be created when true.
-  create: true
+  create: false
   # -- The name of the priority class to (create and) use.
   name: slurm-system-critical
-  # -- Description for the PriorityClass.
+  # -- The description upon creation.
   description: null
   # -- The priority value upon creation.
   value: 1000000000
@@ -40,8 +42,9 @@ priorityClass:
 slurmKey:
   # -- The secret will be created when true.
   create: true
-  # -- Additional annotations to add to the secret.
+  # -- Annotations to add to the secret upon creation.
   annotations: {}
+    # helm.sh/resource-policy: keep
   # -- (secretKeyRef) Reference to the secret.
   secretRef: {}
     # name: slurm-auth-slurm
@@ -52,8 +55,9 @@ slurmKey:
 jwtKey:
   # -- The secret will be created when true.
   create: true
-  # -- Additional annotations to add to the secret.
+  # -- Annotations to add to the secret upon creation.
   annotations: {}
+    # helm.sh/resource-policy: keep
   # -- (secretKeyRef) Reference to the secret.
   secretRef: {}
     # name: slurm-auth-jwths256
@@ -66,7 +70,7 @@ jwksKeys:
   enabled: false
   # -- (configMapKeySelector) Reference to the configMap.
   configMapRef: {}
-    # name: slurm-auth-jwkskeys
+    # name: slurm-auth-jwks
     # key: jwks.json
 
 # -- The cluster name, which uniquely identifies the Slurm cluster.
