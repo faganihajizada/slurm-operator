@@ -32,7 +32,11 @@ type ControllerSpec struct {
 
 	// Slurm `auth/jwt` JWT HS256 key authentication.
 	// +required
-	JwtHs256KeyRef corev1.SecretKeySelector `json:"jwtHs256KeyRef,omitzero"`
+	JwtHs256KeyRef *corev1.SecretKeySelector `json:"jwtHs256KeyRef,omitzero"`
+
+	// Slurm `auth/jwt` JWT key authentication.
+	// +optional
+	JwtKeyRef *corev1.SecretKeySelector `json:"jwtKeyRef,omitzero"`
 
 	// Slurm `auth/jwt` JWKS key authentication.
 	// +optional

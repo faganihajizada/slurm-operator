@@ -77,7 +77,16 @@ func (in *AccountingList) DeepCopyObject() runtime.Object {
 func (in *AccountingSpec) DeepCopyInto(out *AccountingSpec) {
 	*out = *in
 	in.SlurmKeyRef.DeepCopyInto(&out.SlurmKeyRef)
-	in.JwtHs256KeyRef.DeepCopyInto(&out.JwtHs256KeyRef)
+	if in.JwtHs256KeyRef != nil {
+		in, out := &in.JwtHs256KeyRef, &out.JwtHs256KeyRef
+		*out = new(v1.SecretKeySelector)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.JwtKeyRef != nil {
+		in, out := &in.JwtKeyRef, &out.JwtKeyRef
+		*out = new(v1.SecretKeySelector)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.JwksKeyRef != nil {
 		in, out := &in.JwksKeyRef, &out.JwksKeyRef
 		*out = new(v1.ConfigMapKeySelector)
@@ -212,7 +221,16 @@ func (in *ControllerPersistence) DeepCopy() *ControllerPersistence {
 func (in *ControllerSpec) DeepCopyInto(out *ControllerSpec) {
 	*out = *in
 	in.SlurmKeyRef.DeepCopyInto(&out.SlurmKeyRef)
-	in.JwtHs256KeyRef.DeepCopyInto(&out.JwtHs256KeyRef)
+	if in.JwtHs256KeyRef != nil {
+		in, out := &in.JwtHs256KeyRef, &out.JwtHs256KeyRef
+		*out = new(v1.SecretKeySelector)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.JwtKeyRef != nil {
+		in, out := &in.JwtKeyRef, &out.JwtKeyRef
+		*out = new(v1.SecretKeySelector)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.JwksKeyRef != nil {
 		in, out := &in.JwksKeyRef, &out.JwksKeyRef
 		*out = new(v1.ConfigMapKeySelector)
@@ -959,6 +977,7 @@ func (in *TokenList) DeepCopyObject() runtime.Object {
 func (in *TokenSpec) DeepCopyInto(out *TokenSpec) {
 	*out = *in
 	in.JwtHs256KeyRef.DeepCopyInto(&out.JwtHs256KeyRef)
+	in.JwtKeyRef.DeepCopyInto(&out.JwtKeyRef)
 	if in.Lifetime != nil {
 		in, out := &in.Lifetime, &out.Lifetime
 		*out = new(metav1.Duration)

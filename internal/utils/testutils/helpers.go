@@ -40,7 +40,7 @@ func NewController(name string, slurmKeyRef, jwtHs256KeyRef corev1.SecretKeySele
 		},
 		Spec: slinkyv1beta1.ControllerSpec{
 			SlurmKeyRef:    slurmKeyRef,
-			JwtHs256KeyRef: jwtHs256KeyRef,
+			JwtHs256KeyRef: &jwtHs256KeyRef,
 			AccountingRef:  accountingRef,
 			Slurmctld: slinkyv1beta1.ContainerWrapper{
 				Container: corev1.Container{
@@ -118,7 +118,7 @@ func NewAccounting(name string, slurmKeyRef, jwtHs256KeyRef corev1.SecretKeySele
 		},
 		Spec: slinkyv1beta1.AccountingSpec{
 			SlurmKeyRef:    slurmKeyRef,
-			JwtHs256KeyRef: jwtHs256KeyRef,
+			JwtHs256KeyRef: &jwtHs256KeyRef,
 			StorageConfig: slinkyv1beta1.StorageConfig{
 				Host:           "mariadb",
 				PasswordKeyRef: passwordRef,
