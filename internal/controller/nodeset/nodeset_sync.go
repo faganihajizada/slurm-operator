@@ -251,6 +251,10 @@ func (r *NodeSetReconciler) sync(
 		return err
 	}
 
+	if err := r.syncSlurmNodes(ctx, nodeset, pods); err != nil {
+		return err
+	}
+
 	if err := r.syncSlurmDeadline(ctx, nodeset, pods); err != nil {
 		return err
 	}
@@ -461,6 +465,47 @@ func (r *NodeSetReconciler) syncTaint(
 		return nil
 	}
 	if _, err := utils.SlowStartBatch(len(kubeNodeList.Items), utils.SlowStartInitialBatchSize, syncTaintFn); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// syncSlurmNodes handles Slurm node drift where nodes may become unregistered but its pod is running and healthy.
+func (r *NodeSetReconciler) syncSlurmNodes(
+	ctx context.Context,
+	nodeset *slinkyv1beta1.NodeSet,
+	pods []*corev1.Pod,
+) error {
+	logger := log.FromContext(ctx)
+
+	registeredSlurmNodes, ok, err := r.slurmControl.GetNodesForPods(ctx, nodeset, pods)
+	if err != nil {
+		return err
+	} else if !ok {
+		return nil // skip, results cannot be used
+	}
+	registeredSlurmNodeSet := set.New(registeredSlurmNodes...)
+
+	syncSlurmNodesFn := func(i int) error {
+		pod := pods[i]
+		isRegistered := registeredSlurmNodeSet.Has(nodesetutils.GetNodeName(pod))
+		if isRegistered ||
+			!podutils.IsRunningAndAvailable(pod, nodeset.Spec.MinReadySeconds) ||
+			!podutils.IsHealthy(pod) {
+			// Cannot determine if Slurm node should be registered at this time.
+			return nil
+		}
+		logger.Info("Deleting NodeSet pod, Slurm node is not registered but pod is healthy",
+			"pod", klog.KObj(pod))
+		if err := r.Delete(ctx, pod); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
+		return nil
+	}
+	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, syncSlurmNodesFn); err != nil {
 		return err
 	}
 
