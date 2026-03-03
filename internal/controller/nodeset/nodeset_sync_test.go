@@ -1029,10 +1029,11 @@ func TestNodeSetReconciler_doPodProcessing(t *testing.T) {
 		ClientMap *clientmap.ClientMap
 	}
 	type args struct {
-		ctx     context.Context
-		nodeset *slinkyv1beta1.NodeSet
-		pods    []*corev1.Pod
-		hash    string
+		ctx          context.Context
+		nodeset      *slinkyv1beta1.NodeSet
+		pods         []*corev1.Pod
+		podsToDelete []*corev1.Pod
+		hash         string
 	}
 	tests := []struct {
 		name    string
@@ -1045,7 +1046,7 @@ func TestNodeSetReconciler_doPodProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodProcessing(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
+			if err := r.doPodProcessing(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.podsToDelete, tt.args.hash); (err != nil) != tt.wantErr {
 				t.Errorf("NodeSetReconciler.doPodProcessing() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

@@ -739,18 +739,14 @@ func (r *NodeSetReconciler) syncNodeSet(
 
 	// Delete pods that were created for a different ScalingMode
 	// (e.g. after switching nodeset from statefulset to daemonset or vice versa).
-	var podsToDelete, podsToKeep []*corev1.Pod
+	var podsOldScaling, podsNewScaling []*corev1.Pod
 	for _, pod := range pods {
 		podMode := slinkyv1beta1.ScalingModeType(pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode])
 		if podMode != nodeset.Spec.ScalingMode {
-			podsToDelete = append(podsToDelete, pod)
+			podsOldScaling = append(podsOldScaling, pod)
 		} else {
-			podsToKeep = append(podsToKeep, pod)
+			podsNewScaling = append(podsNewScaling, pod)
 		}
-	}
-	if len(podsToDelete) > 0 {
-		logger.V(2).Info("Deleting pods with wrong ScalingMode", "desired", nodeset.Spec.ScalingMode, "count", len(podsToDelete))
-		return r.doPodScale(ctx, nodeset, podsToKeep, podsToDelete, nil)
 	}
 
 	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeDaemonset {
@@ -759,7 +755,7 @@ func (r *NodeSetReconciler) syncNodeSet(
 		if err := r.List(ctx, nodeList); err != nil {
 			return err
 		}
-		nodeToDaemonPods := r.getNodesToDaemonPods(ctx, nodeset, pods, false)
+		nodeToDaemonPods := r.getNodesToDaemonPods(ctx, nodeset, podsNewScaling, false)
 		var nodesNeedingDaemonPods []string
 		var podsToDelete []*corev1.Pod
 		for _, node := range nodeList.Items {
@@ -778,14 +774,15 @@ func (r *NodeSetReconciler) syncNodeSet(
 			podsToCreate[i] = pod
 		}
 		if len(podsToDelete) > 0 || len(podsToCreate) > 0 {
-			return r.doPodScale(ctx, nodeset, podsToKeep, podsToDelete, podsToCreate)
+			return r.doPodScale(ctx, nodeset, podsNewScaling, podsToDelete, podsToCreate)
 		}
 	} else {
 		logger.V(2).Info("Processing NodeSet pods for replica scaling")
+
 		// Handle replica scaling by comparing the known pods to the target number of replicas.
 		// Create or delete pods as needed to reach the target number.
 		replicaCount := int(ptr.Deref(nodeset.Spec.Replicas, 0))
-		diff := len(pods) - replicaCount
+		diff := len(podsNewScaling) - replicaCount
 		if diff < 0 {
 			diff = -diff
 
@@ -807,17 +804,17 @@ func (r *NodeSetReconciler) syncNodeSet(
 				podsToCreate[i] = pod
 			}
 			logger.V(2).Info("Too few NodeSet pods", "need", replicaCount, "creating", diff)
-			return r.doPodScale(ctx, nodeset, pods, nil, podsToCreate)
+			return r.doPodScale(ctx, nodeset, podsNewScaling, nil, podsToCreate)
 		}
 		if diff > 0 {
 			logger.V(2).Info("Too many NodeSet pods", "need", replicaCount, "deleting", diff)
-			podsToDelete, podsToKeep := nodesetutils.SplitActivePods(pods, diff)
+			podsToDelete, podsToKeep := nodesetutils.SplitActivePods(podsNewScaling, diff)
 			return r.doPodScale(ctx, nodeset, podsToKeep, podsToDelete, nil)
 		}
 	}
 
-	logger.V(2).Info("Processing NodeSet pods", "number of pods to process", len(pods))
-	return r.doPodProcessing(ctx, nodeset, pods, hash)
+	logger.V(2).Info("Processing NodeSet pods", "number of pods to process", len(podsNewScaling), "number of pods to delete", len(podsOldScaling))
+	return r.doPodProcessing(ctx, nodeset, podsNewScaling, podsOldScaling, hash)
 }
 
 // doPodScale manages NodeSet pod creation and deletion
@@ -1033,11 +1030,16 @@ func (r *NodeSetReconciler) processCondemned(
 func (r *NodeSetReconciler) doPodProcessing(
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
-	pods []*corev1.Pod,
+	pods, podsToDelete []*corev1.Pod,
 	hash string,
 ) error {
+	var errs []error
 	logger := log.FromContext(ctx)
 	key := objectutils.KeyFunc(nodeset)
+
+	if err := r.expectations.SetExpectations(logger, key, 0, 0); err != nil {
+		return err
+	}
 
 	// NOTE: we must respect the uncordon and undrain nodes in accordance with updateStrategy
 	// to not fight it given the statefulness of how we cordon and terminate nodeset pods.
@@ -1047,11 +1049,25 @@ func (r *NodeSetReconciler) doPodProcessing(
 		return r.syncPodUncordon(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(podsToKeep), utils.SlowStartInitialBatchSize, uncordonFn); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 
-	if err := r.expectations.SetExpectations(logger, key, 0, 0); err != nil {
-		return err
+	deletePodFn := func(index int) error {
+		pod := podsToDelete[index]
+		podKey := kubecontroller.PodKey(pod)
+		if err := r.processCondemned(ctx, nodeset, podsToDelete, index); err != nil {
+			// Decrement the expected number of deletes because the informer won't observe this deletion
+			r.expectations.DeletionObserved(logger, key, podKey)
+			if !apierrors.IsNotFound(err) {
+				logger.V(2).Info("Failed to delete pod, decremented expectations",
+					"pod", podKey, "kind", slinkyv1beta1.NodeSetGVK)
+				return err
+			}
+		}
+		return nil
+	}
+	if _, err := utils.SlowStartBatch(len(podsToDelete), utils.SlowStartInitialBatchSize, deletePodFn); err != nil {
+		errs = append(errs, err)
 	}
 
 	processNodeSetPodFn := func(i int) error {
@@ -1059,10 +1075,10 @@ func (r *NodeSetReconciler) doPodProcessing(
 		return r.processNodeSetPod(ctx, nodeset, pod)
 	}
 	if _, err := utils.SlowStartBatch(len(pods), utils.SlowStartInitialBatchSize, processNodeSetPodFn); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 // processNodeSetPod will ensure the NodeSet pod can be scheduled and cleanup errant pods.
