@@ -186,10 +186,10 @@ func controllerVolumes(controller *slinkyv1beta1.Controller, extra []string) []c
 						{
 							Secret: &corev1.SecretProjection{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controller.AuthJwtHs256Ref().Name,
+									Name: controller.AuthJwtRef().Name,
 								},
 								Items: []corev1.KeyToPath{
-									{Key: controller.AuthJwtHs256Ref().Key, Path: common.JwtHs256KeyFile},
+									{Key: controller.AuthJwtRef().Key, Path: common.JwtKeyFile},
 								},
 							},
 						},

@@ -85,8 +85,8 @@ func (r *ControllerWebhook) ValidateUpdate(ctx context.Context, oldController, n
 	if !apiequality.Semantic.DeepEqual(newController.Spec.SlurmKeyRef.LocalObjectReference, oldController.Spec.SlurmKeyRef.LocalObjectReference) {
 		errs = append(errs, errors.New("cannot change SlurmKeyRef after deployment"))
 	}
-	if !apiequality.Semantic.DeepEqual(newController.Spec.JwtHs256KeyRef.LocalObjectReference, oldController.Spec.JwtHs256KeyRef.LocalObjectReference) {
-		errs = append(errs, errors.New("cannot change JwtHs256KeyRef after deployment"))
+	if !apiequality.Semantic.DeepEqual(newController.Spec.JwtKeyRef, oldController.Spec.JwtKeyRef) {
+		errs = append(errs, errors.New("cannot change JwtKeyRef after deployment"))
 	}
 
 	// We use volumeClaimTemplates to handle the controller savestate PVC.

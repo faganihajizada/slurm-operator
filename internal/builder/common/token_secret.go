@@ -18,8 +18,8 @@ import (
 func (b *CommonBuilder) BuildTokenSecret(token *slinkyv1beta1.Token) (*corev1.Secret, error) {
 	ctx := context.TODO()
 
-	jwtHs256Ref := token.JwtHs256Ref()
-	signingKey, err := b.refResolver.GetSecretKeyRef(ctx, &jwtHs256Ref.SecretKeySelector, jwtHs256Ref.Namespace)
+	jwtRef := token.JwtRef()
+	signingKey, err := b.refResolver.GetSecretKeyRef(ctx, &jwtRef.SecretKeySelector, jwtRef.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -44,12 +44,12 @@ func (b *CommonBuilder) BuildTokenSecret(token *slinkyv1beta1.Token) (*corev1.Se
 		Immutable: !ptr.Deref(token.Spec.Refresh, defaults.DefaultTokenRefresh),
 	}
 
-	jwtHs256Secret := &corev1.Secret{}
-	if err := b.client.Get(ctx, token.JwtHs256Key(), jwtHs256Secret); err != nil {
+	jwtSecret := &corev1.Secret{}
+	if err := b.client.Get(ctx, token.JwtKey(), jwtSecret); err != nil {
 		return nil, err
 	}
 
-	o, err := b.BuildSecret(opts, jwtHs256Secret)
+	o, err := b.BuildSecret(opts, jwtSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build token secret: %w", err)
 	}

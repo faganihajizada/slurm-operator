@@ -71,7 +71,7 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
                   namespace:
-                    description: The namespace of the Slurm `auth/jwt` JWT HS256 key.
+                    description: The namespace of the Slurm `auth/jwt` JWT key.
                     type: string
                   optional:
                     description: Specify whether the Secret or its key must be defined
@@ -97,7 +97,7 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
                   namespace:
-                    description: The namespace of the Slurm `auth/jwt` JWT HS256 key.
+                    description: The namespace of the Slurm `auth/jwt` JWT key.
                     type: string
                   optional:
                     description: Specify whether the Secret or its key must be defined
