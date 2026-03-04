@@ -19,6 +19,11 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: The number of nodes match the node selector and tolerations (DaemonSet
+        mode) or replicas (StatefulSet mode).
+      jsonPath: .status.desired
+      name: DESIRED
+      type: integer
     - description: The current number of pods.
       jsonPath: .status.replicas
       name: REPLICAS
@@ -161,6 +166,7 @@ spec:
                   These are replicas in the sense that they are instantiations of the
                   same Template, but individual replicas also have a consistent identity.
                   If unspecified, defaults to 1.
+                  When ScalingMode is daemonset, this field is ignored.
                 format: int32
                 type: integer
               revisionHistoryLimit:
@@ -171,6 +177,15 @@ spec:
                   NodeSetSpec version. The default value is 0.
                 format: int32
                 type: integer
+              scalingMode:
+                default: StatefulSet
+                description: |-
+                  ScalingMode controls how the NodeSet scales pods.
+                  "StatefulSet" uses a fixed replica count; "DaemonSet" schedules one pod per matching node.
+                enum:
+                - DaemonSet
+                - StatefulSet
+                type: string
               slurmd:
                 description: |-
                   The slurmd container configuration.
@@ -387,6 +402,13 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              desired:
+                description: |-
+                  Desired is the number of nodes that should be running a NodeSet pod.
+                  In DaemonSet scaling mode this is the number of nodes matching the node selector and tolerations.
+                  In StatefulSet scaling mode this is the number of replicas.
+                format: int32
+                type: integer
               nodeSetHash:
                 description: |-
                   NodeSetHash is the "controller-revision-hash", which represents the

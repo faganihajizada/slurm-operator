@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -77,7 +79,8 @@ func newNodeSet(name, controllerName string, replicas int32) *slinkyv1beta1.Node
 				Namespace: corev1.NamespaceDefault,
 				Name:      controllerName,
 			},
-			Replicas: ptr.To(replicas),
+			Replicas:    ptr.To(replicas),
+			ScalingMode: slinkyv1beta1.ScalingModeStatefulset,
 			Template: slinkyv1beta1.PodTemplate{
 				Metadata: slinkyv1beta1.Metadata{
 					Labels: map[string]string{
@@ -108,6 +111,30 @@ func newClientMap(controllerName string, client slurmclient.Client) *clientmap.C
 	}
 	cm.Add(key, client)
 	return cm
+}
+
+func newDaemonPodForNodeSet(name, nodeName string, nodeset *slinkyv1beta1.NodeSet) *corev1.Pod {
+	ns := corev1.NamespaceDefault
+	if nodeset != nil {
+		ns = nodeset.Namespace
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+			Labels: map[string]string{
+				slinkyv1beta1.LabelNodeSetPodHostname: nodeName,
+				slinkyv1beta1.LabelNodeSetScalingMode: string(slinkyv1beta1.ScalingModeDaemonset),
+			},
+		},
+		Spec: corev1.PodSpec{
+			NodeName: nodeName,
+		},
+	}
+	if nodeset != nil {
+		pod.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(nodeset, slinkyv1beta1.NodeSetGVK)}
+	}
+	return pod
 }
 
 func newNodeSetPodSlurmNode(pod *corev1.Pod) *slurmtypes.V0044Node {
@@ -385,7 +412,7 @@ func TestNodeSetReconciler_getNodeSetPods(t *testing.T) {
 			fields: fields{
 				Client: fake.NewFakeClient(
 					nodeset.DeepCopy(),
-					nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, ""),
+					nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, ""),
 					&corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "blank",
@@ -396,7 +423,7 @@ func TestNodeSetReconciler_getNodeSetPods(t *testing.T) {
 				ctx:     context.TODO(),
 				nodeset: nodeset.DeepCopy(),
 			},
-			want:    []string{klog.KObj(nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")).String()},
+			want:    []string{klog.KObj(nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")).String()},
 			wantErr: false,
 		},
 	}
@@ -486,7 +513,7 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 	}
 	nodesetNoTaint := newNodeSet("foo", controller.Name, 2)
 	nodesetNoTaint.UID = "1234"
-	podNoTaint := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodesetNoTaint, controller, 0, "")
+	podNoTaint := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodesetNoTaint, controller, 0, "")
 	podNoTaint.Spec.NodeName = "node1"
 	podNoTaint.Status.Phase = corev1.PodRunning
 	if err := controllerutil.SetControllerReference(nodesetNoTaint, podNoTaint, clientgoscheme.Scheme); err != nil {
@@ -496,7 +523,7 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 	nodesetTaint := newNodeSet("bar", controller.Name, 2)
 	nodesetTaint.Spec.TaintKubeNodes = true
 	nodesetTaint.UID = "2345"
-	podTaint := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodesetTaint, controller, 0, "")
+	podTaint := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodesetTaint, controller, 0, "")
 	podTaint.Spec.NodeName = "node1"
 	podTaint.Status.Phase = corev1.PodRunning
 	if err := controllerutil.SetControllerReference(nodesetTaint, podTaint, clientgoscheme.Scheme); err != nil {
@@ -673,65 +700,6 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 			}
 			if tt.wantTaint != taints.TaintExists(node.Spec.Taints, &slurmtaints.TaintNodeWorker) {
 				t.Errorf("NodeSetReconciler.syncTaint() slice.Contains(node.Spec.Taints, slurmtaints.TaintNodeWorker) = %v, wantTaintNoExecute = %v", node.Spec.Taints, tt.wantTaint)
-			}
-		})
-	}
-}
-
-func TestNodeSetReconciler_doPodScaleOut(t *testing.T) {
-	type fields struct {
-		Client    client.Client
-		ClientMap *clientmap.ClientMap
-	}
-	type args struct {
-		ctx       context.Context
-		nodeset   *slinkyv1beta1.NodeSet
-		pods      []*corev1.Pod
-		numCreate int
-		hash      string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodScaleOut(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.numCreate, tt.args.hash); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.doPodScaleOut() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestNodeSetReconciler_doPodScaleIn(t *testing.T) {
-	type fields struct {
-		Client    client.Client
-		ClientMap *clientmap.ClientMap
-	}
-	type args struct {
-		ctx          context.Context
-		nodeset      *slinkyv1beta1.NodeSet
-		podsToDelete []*corev1.Pod
-		podsToKeep   []*corev1.Pod
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodScaleIn(tt.args.ctx, tt.args.nodeset, tt.args.podsToDelete, tt.args.podsToKeep); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.doPodScaleIn() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -1061,10 +1029,11 @@ func TestNodeSetReconciler_doPodProcessing(t *testing.T) {
 		ClientMap *clientmap.ClientMap
 	}
 	type args struct {
-		ctx     context.Context
-		nodeset *slinkyv1beta1.NodeSet
-		pods    []*corev1.Pod
-		hash    string
+		ctx          context.Context
+		nodeset      *slinkyv1beta1.NodeSet
+		pods         []*corev1.Pod
+		podsToDelete []*corev1.Pod
+		hash         string
 	}
 	tests := []struct {
 		name    string
@@ -1077,14 +1046,14 @@ func TestNodeSetReconciler_doPodProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.doPodProcessing(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
+			if err := r.doPodProcessing(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.podsToDelete, tt.args.hash); (err != nil) != tt.wantErr {
 				t.Errorf("NodeSetReconciler.doPodProcessing() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestNodeSetReconciler_processReplica(t *testing.T) {
+func TestNodeSetReconciler_processNodeSetPod(t *testing.T) {
 	type fields struct {
 		Client    client.Client
 		ClientMap *clientmap.ClientMap
@@ -1105,8 +1074,8 @@ func TestNodeSetReconciler_processReplica(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.processReplica(tt.args.ctx, tt.args.nodeset, tt.args.pod); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.processReplica() error = %v, wantErr %v", err, tt.wantErr)
+			if err := r.processNodeSetPod(tt.args.ctx, tt.args.nodeset, tt.args.pod); (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.processNodeSetPod() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -1119,7 +1088,7 @@ func TestNodeSetReconciler_makePodCordonAndDrain(t *testing.T) {
 		},
 	}
 	nodeset := newNodeSet("foo", controller.Name, 2)
-	pod := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
+	pod := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
 	type fields struct {
 		Client    client.Client
 		ClientMap *clientmap.ClientMap
@@ -1383,7 +1352,7 @@ func TestNodeSetReconciler_makePodUncordonAndUndrain(t *testing.T) {
 		},
 	}
 	nodeset := newNodeSet("foo", controller.Name, 2)
-	pod := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
+	pod := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
 	pod.Annotations[slinkyv1beta1.AnnotationPodCordon] = "true"
 	type fields struct {
 		Client    client.Client
@@ -1648,8 +1617,8 @@ func TestNodeSetReconciler_syncUpdate(t *testing.T) {
 		func() testCaseFields {
 			nodeset := newNodeSet("foo", controller.Name, 2)
 			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.OnDeleteNodeSetStrategyType
-			pod1 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
-			pod2 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
 			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
 			slurmNodeList := &slurmtypes.V0044NodeList{
 				Items: []slurmtypes.V0044Node{
@@ -1689,8 +1658,8 @@ func TestNodeSetReconciler_syncUpdate(t *testing.T) {
 			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
-			pod1 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
-			pod2 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
 			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
 			slurmNodeList := &slurmtypes.V0044NodeList{
 				Items: []slurmtypes.V0044Node{
@@ -1765,9 +1734,9 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
-			pod1 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
 			makePodHealthy(pod1)
-			pod2 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
 			makePodHealthy(pod2)
 			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
 			slurmNodeList := &slurmtypes.V0044NodeList{
@@ -1808,9 +1777,9 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
-			pod1 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
 			makePodHealthy(pod1)
-			pod2 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 1, hash)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, hash)
 			makePodHealthy(pod2)
 			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
 			slurmNodeList := &slurmtypes.V0044NodeList{
@@ -1851,9 +1820,9 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
-			pod1 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
 			makePodHealthy(pod1)
-			pod2 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
 			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
 			slurmNodeList := &slurmtypes.V0044NodeList{
 				Items: []slurmtypes.V0044Node{
@@ -2303,7 +2272,7 @@ func Test_syncPodUncordon(t *testing.T) {
 		},
 	}
 	nodeset := newNodeSet("foo", controller.Name, 2)
-	pod := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
+	pod := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
 	pod.Annotations[slinkyv1beta1.AnnotationPodCordon] = "true"
 
 	type fields struct {
@@ -2432,8 +2401,8 @@ func TestNodeSetReconciler_syncSlurmTopology(t *testing.T) {
 		},
 	}
 	nodeset := newNodeSet("foo", controller.Name, 2)
-	pod := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
-	pod2 := nodesetutils.NewNodeSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+	pod := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
+	pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
 	pod2.Spec.NodeName = node2.Name
 
 	tests := []struct {
@@ -2517,6 +2486,384 @@ func TestNodeSetReconciler_syncSlurmTopology(t *testing.T) {
 				if !apiequality.Semantic.DeepEqual(topologyLine, ptr.Deref(slurmNode.Topology, "")) {
 					t.Errorf("Kube node and Slurm node topology are incongruent: Kube node = '%v' ; slurm node = '%v'", topologyLine, ptr.Deref(slurmNode.Topology, ""))
 				}
+			}
+		})
+	}
+}
+
+func TestGetNodesToDaemonPods(t *testing.T) {
+	nodeset := newNodeSet("foo", "ctrl", 1)
+	nodeset.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	nodeset2 := newNodeSet("foo2", "ctrl", 1)
+	nodeset2.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = slinkyv1beta1.AddToScheme(scheme)
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	r := newNodeSetController(client, nil)
+
+	cases := map[string]struct {
+		includeDeletedTerminal bool
+		pods                   []*corev1.Pod
+		expectedPodNames       []string
+	}{
+		"exclude deleted terminal pods": {
+			pods: []*corev1.Pod{
+				newDaemonPodForNodeSet("matching-owned-0", "node-0", nodeset),
+				newDaemonPodForNodeSet("matching-orphan-0", "node-0", nil),
+				newDaemonPodForNodeSet("matching-owned-1", "node-1", nodeset),
+				newDaemonPodForNodeSet("matching-orphan-1", "node-1", nil),
+				func() *corev1.Pod {
+					pod := newDaemonPodForNodeSet("matching-owned-succeeded-pod-0", "node-0", nodeset)
+					pod.Status = corev1.PodStatus{Phase: corev1.PodSucceeded}
+					return pod
+				}(),
+				func() *corev1.Pod {
+					pod := newDaemonPodForNodeSet("matching-owned-failed-pod-1", "node-1", nodeset)
+					pod.Status = corev1.PodStatus{Phase: corev1.PodFailed}
+					return pod
+				}(),
+				func() *corev1.Pod {
+					pod := newDaemonPodForNodeSet("matching-owned-succeeded-deleted-pod-0", "node-0", nodeset)
+					now := metav1.Now()
+					pod.DeletionTimestamp = &now
+					pod.Status = corev1.PodStatus{Phase: corev1.PodSucceeded}
+					return pod
+				}(),
+				func() *corev1.Pod {
+					pod := newDaemonPodForNodeSet("matching-owned-failed-deleted-pod-1", "node-1", nodeset)
+					now := metav1.Now()
+					pod.DeletionTimestamp = &now
+					pod.Status = corev1.PodStatus{Phase: corev1.PodFailed}
+					return pod
+				}(),
+			},
+			expectedPodNames: []string{
+				"matching-owned-0", "matching-orphan-0", "matching-owned-1", "matching-orphan-1",
+				"matching-owned-succeeded-pod-0", "matching-owned-failed-pod-1",
+			},
+		},
+		"include deleted terminal pods": {
+			includeDeletedTerminal: true,
+			pods: []*corev1.Pod{
+				newDaemonPodForNodeSet("matching-owned-0", "node-0", nodeset),
+				newDaemonPodForNodeSet("matching-orphan-0", "node-0", nil),
+				newDaemonPodForNodeSet("matching-owned-1", "node-1", nodeset),
+				newDaemonPodForNodeSet("matching-orphan-1", "node-1", nil),
+				func() *corev1.Pod {
+					pod := newDaemonPodForNodeSet("matching-owned-succeeded-pod-0", "node-0", nodeset)
+					pod.Status = corev1.PodStatus{Phase: corev1.PodSucceeded}
+					return pod
+				}(),
+				func() *corev1.Pod {
+					pod := newDaemonPodForNodeSet("matching-owned-failed-deleted-pod-1", "node-1", nodeset)
+					now := metav1.Now()
+					pod.DeletionTimestamp = &now
+					pod.Status = corev1.PodStatus{Phase: corev1.PodFailed}
+					return pod
+				}(),
+			},
+			expectedPodNames: []string{
+				"matching-owned-0", "matching-orphan-0", "matching-owned-1", "matching-orphan-1",
+				"matching-owned-succeeded-pod-0", "matching-owned-failed-deleted-pod-1",
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			nodesToDaemonPods := r.getNodesToDaemonPods(ctx, nodeset, tc.pods, tc.includeDeletedTerminal)
+			gotPods := map[string]bool{}
+			for node, pods := range nodesToDaemonPods {
+				for _, pod := range pods {
+					if pod.Spec.NodeName != node {
+						t.Errorf("pod %v grouped into %v but belongs in %v", pod.Name, node, pod.Spec.NodeName)
+					}
+					gotPods[pod.Name] = true
+				}
+			}
+			for _, wantName := range tc.expectedPodNames {
+				if !gotPods[wantName] {
+					t.Errorf("expected pod %v but didn't get it", wantName)
+				}
+				delete(gotPods, wantName)
+			}
+			for podName := range gotPods {
+				t.Errorf("unexpected pod %v was returned", podName)
+			}
+		})
+	}
+}
+
+// newNodeForNodeSetTest returns a node for NodeShouldRunDaemonPod tests.
+func newNodeForNodeSetTest(name string, labels map[string]string, unschedulable bool) *corev1.Node {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: labels,
+		},
+		Status: corev1.NodeStatus{
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory: *resource.NewQuantity(100*1024*1024, resource.BinarySI),
+				corev1.ResourceCPU:    *resource.NewMilliQuantity(1000, resource.DecimalSI),
+			},
+		},
+		Spec: corev1.NodeSpec{
+			Unschedulable: unschedulable,
+		},
+	}
+	return node
+}
+
+func TestNodeShouldRunDaemonPod(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "slurm",
+			Namespace: corev1.NamespaceDefault,
+		},
+	}
+	sch := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(sch)
+	_ = slinkyv1beta1.AddToScheme(sch)
+
+	// NodeSet with no extra constraints (template has default pod spec from newNodeSet).
+	nodeSetBasic := newNodeSet("foo", controller.Name, 1)
+	nodeSetBasic.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+
+	// NodeSet with NodeSelector that does not match node (node has type=production, selector wants type=test).
+	nodeSetNodeSelectorMismatch := newNodeSet("foo", controller.Name, 1)
+	nodeSetNodeSelectorMismatch.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	nodeSetNodeSelectorMismatch.Spec.Template.PodSpecWrapper.NodeSelector = map[string]string{"type": "test"}
+
+	// NodeSet with NodeSelector that matches node (type=production).
+	nodeSetNodeSelectorMatch := newNodeSet("foo", controller.Name, 1)
+	nodeSetNodeSelectorMatch.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	nodeSetNodeSelectorMatch.Spec.Template.PodSpecWrapper.NodeSelector = map[string]string{"type": "production"}
+
+	// NodeSet with NodeAffinity required type=production -> matches node with type=production.
+	nodeSetAffinityMatch := newNodeSet("foo", controller.Name, 1)
+	nodeSetAffinityMatch.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	nodeSetAffinityMatch.Spec.Template.PodSpecWrapper.Affinity = &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+					MatchExpressions: []corev1.NodeSelectorRequirement{{
+						Key:      "type",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"production"},
+					}},
+				}},
+			},
+		},
+	}
+
+	cases := []struct {
+		predicateName                    string
+		node                             *corev1.Node
+		nodeset                          *slinkyv1beta1.NodeSet
+		shouldRun, shouldContinueRunning bool
+	}{
+		{
+			predicateName:         "ShouldRunDaemonPod",
+			node:                  newNodeForNodeSetTest("test-node", map[string]string{"type": "production"}, false),
+			nodeset:               nodeSetBasic,
+			shouldRun:             true,
+			shouldContinueRunning: true,
+		},
+		{
+			predicateName:         "ErrNodeSelectorNotMatch",
+			node:                  newNodeForNodeSetTest("test-node", map[string]string{"type": "production"}, false),
+			nodeset:               nodeSetNodeSelectorMismatch,
+			shouldRun:             false,
+			shouldContinueRunning: false,
+		},
+		{
+			predicateName:         "ShouldRunDaemonPod_NodeSelectorMatch",
+			node:                  newNodeForNodeSetTest("test-node", map[string]string{"type": "production"}, false),
+			nodeset:               nodeSetNodeSelectorMatch,
+			shouldRun:             true,
+			shouldContinueRunning: true,
+		},
+		{
+			predicateName:         "ShouldRunDaemonPod_NodeAffinityMatch",
+			node:                  newNodeForNodeSetTest("test-node", map[string]string{"type": "production"}, false),
+			nodeset:               nodeSetAffinityMatch,
+			shouldRun:             true,
+			shouldContinueRunning: true,
+		},
+		{
+			predicateName:         "ShouldRunDaemonPodOnUnschedulableNode",
+			node:                  newNodeForNodeSetTest("test-node", map[string]string{"type": "production"}, true),
+			nodeset:               nodeSetBasic,
+			shouldRun:             true,
+			shouldContinueRunning: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.predicateName, func(t *testing.T) {
+			ctx := context.Background()
+			client := fake.NewClientBuilder().
+				WithScheme(sch).
+				WithObjects(controller).
+				Build()
+			r := newNodeSetController(client, nil)
+
+			shouldRun, shouldContinueRunning := r.NodeShouldRunDaemonPod(ctx, c.node, c.nodeset)
+			if shouldRun != c.shouldRun {
+				t.Errorf("NodeShouldRunDaemonPod(): predicateName: %v expected shouldRun: %v, got: %v", c.predicateName, c.shouldRun, shouldRun)
+			}
+			if shouldContinueRunning != c.shouldContinueRunning {
+				t.Errorf("NodeShouldRunDaemonPod(): predicateName: %v expected shouldContinueRunning: %v, got: %v", c.predicateName, c.shouldContinueRunning, shouldContinueRunning)
+			}
+		})
+	}
+}
+
+func TestNodeSetReconciler_podsShouldBeOnNode(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "slurm",
+			Namespace: corev1.NamespaceDefault,
+		},
+	}
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = slinkyv1beta1.AddToScheme(scheme)
+
+	nodesetBasic := newNodeSet("foo", controller.Name, 1)
+	nodesetBasic.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+
+	nodesetNodeSelectorMismatch := newNodeSet("bar", controller.Name, 1)
+	nodesetNodeSelectorMismatch.Spec.ScalingMode = slinkyv1beta1.ScalingModeDaemonset
+	nodesetNodeSelectorMismatch.Spec.Template.PodSpecWrapper.NodeSelector = map[string]string{"type": "test"}
+
+	nodeReady := newNodeForNodeSetTest("node-ready", map[string]string{"type": "production"}, false)
+	nodeMismatch := newNodeForNodeSetTest("node-mismatch", map[string]string{"type": "production"}, false)
+
+	client := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(controller).
+		Build()
+	r := newNodeSetController(client, nil)
+
+	ctx := context.Background()
+
+	tests := []struct {
+		name                      string
+		node                      *corev1.Node
+		nodeset                   *slinkyv1beta1.NodeSet
+		nodeToDaemonPods          map[string][]*corev1.Pod
+		expectedNeedingDaemonPods []string
+		expectedPodNamesToDelete  []string
+	}{
+		{
+			name:                      "Node should run daemon pod but no pod exists",
+			node:                      nodeReady,
+			nodeset:                   nodesetBasic,
+			nodeToDaemonPods:          map[string][]*corev1.Pod{},
+			expectedNeedingDaemonPods: []string{"node-ready"},
+			expectedPodNamesToDelete:  nil,
+		},
+		{
+			name:    "Node should run and has one running pod",
+			node:    nodeReady,
+			nodeset: nodesetBasic,
+			nodeToDaemonPods: map[string][]*corev1.Pod{
+				"node-ready": {newDaemonPodForNodeSet("pod-1", "node-ready", nodesetBasic)},
+			},
+			expectedNeedingDaemonPods: nil,
+			expectedPodNamesToDelete:  nil,
+		},
+		{
+			name:    "Node should run and has failed pod",
+			node:    nodeReady,
+			nodeset: nodesetBasic,
+			nodeToDaemonPods: map[string][]*corev1.Pod{
+				"node-ready": func() []*corev1.Pod {
+					pod := newDaemonPodForNodeSet("failed-pod", "node-ready", nodesetBasic)
+					pod.Status.Phase = corev1.PodFailed
+					return []*corev1.Pod{pod}
+				}(),
+			},
+			expectedNeedingDaemonPods: nil,
+			expectedPodNamesToDelete:  []string{"failed-pod"},
+		},
+		{
+			name:    "Node should run and has succeeded pod",
+			node:    nodeReady,
+			nodeset: nodesetBasic,
+			nodeToDaemonPods: map[string][]*corev1.Pod{
+				"node-ready": func() []*corev1.Pod {
+					pod := newDaemonPodForNodeSet("succeeded-pod", "node-ready", nodesetBasic)
+					pod.Status.Phase = corev1.PodSucceeded
+					return []*corev1.Pod{pod}
+				}(),
+			},
+			expectedNeedingDaemonPods: nil,
+			expectedPodNamesToDelete:  []string{"succeeded-pod"},
+		},
+		{
+			name:    "Node should run and has multiple running pods, prunes to oldest",
+			node:    nodeReady,
+			nodeset: nodesetBasic,
+			nodeToDaemonPods: map[string][]*corev1.Pod{
+				"node-ready": func() []*corev1.Pod {
+					p1 := newDaemonPodForNodeSet("old-pod", "node-ready", nodesetBasic)
+					p1.Status = corev1.PodStatus{
+						Phase: corev1.PodRunning,
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue, LastTransitionTime: metav1.NewTime(time.Unix(1, 0))},
+						},
+					}
+					p1.CreationTimestamp = metav1.NewTime(time.Unix(1, 0))
+					p2 := newDaemonPodForNodeSet("new-pod", "node-ready", nodesetBasic)
+					p2.Status = corev1.PodStatus{
+						Phase: corev1.PodRunning,
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue, LastTransitionTime: metav1.NewTime(time.Unix(2, 0))},
+						},
+					}
+					p2.CreationTimestamp = metav1.NewTime(time.Unix(2, 0))
+					return []*corev1.Pod{p1, p2}
+				}(),
+			},
+			expectedNeedingDaemonPods: nil,
+			expectedPodNamesToDelete:  []string{"old-pod"},
+		},
+		{
+			name:    "Node should not run (selector mismatch) but has pods, delete all",
+			node:    nodeMismatch,
+			nodeset: nodesetNodeSelectorMismatch,
+			nodeToDaemonPods: map[string][]*corev1.Pod{
+				"node-mismatch": {newDaemonPodForNodeSet("pod-tainted", "node-mismatch", nodesetNodeSelectorMismatch)},
+			},
+			expectedNeedingDaemonPods: nil,
+			expectedPodNamesToDelete:  []string{"pod-tainted"},
+		},
+		{
+			name:                      "Node should not run and no pods",
+			node:                      nodeMismatch,
+			nodeset:                   nodesetNodeSelectorMismatch,
+			nodeToDaemonPods:          map[string][]*corev1.Pod{},
+			expectedNeedingDaemonPods: nil,
+			expectedPodNamesToDelete:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			needing, toDelete := r.podsShouldBeOnNode(ctx, tt.node, tt.nodeToDaemonPods, tt.nodeset)
+			if !slices.Equal(needing, tt.expectedNeedingDaemonPods) {
+				t.Errorf("nodesNeedingDaemonPods = %v, want %v", needing, tt.expectedNeedingDaemonPods)
+			}
+			gotNames := make([]string, 0, len(toDelete))
+			for _, p := range toDelete {
+				gotNames = append(gotNames, p.Name)
+			}
+			if !slices.Equal(gotNames, tt.expectedPodNamesToDelete) {
+				t.Errorf("podsToDelete names = %v, want %v", gotNames, tt.expectedPodNamesToDelete)
 			}
 		})
 	}

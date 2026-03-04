@@ -6,12 +6,10 @@ package webhook
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
@@ -26,8 +24,7 @@ var accountinglog = logf.Log.WithName("accounting-resource")
 
 // SetupWebhookWithManager will setup the manager to manage the webhooks
 func (r *AccountingSetWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&slinkyv1beta1.Accounting{}).
+	return ctrl.NewWebhookManagedBy(mgr, &slinkyv1beta1.Accounting{}).
 		WithValidator(r).
 		Complete()
 }
@@ -37,20 +34,17 @@ func (r *AccountingSetWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // Modifying the path for an invalid path can cause API server errors; failing to locate the webhook.
 // +kubebuilder:webhook:path=/validate-slinky-slurm-net-v1beta1-accounting,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,sideEffects=None,groups=slinky.slurm.net,resources=accountings,verbs=create;update,versions=v1beta1,name=accounting-v1beta1.kb.io,admissionReviewVersions=v1beta1
 
-var _ webhook.CustomValidator = &AccountingSetWebhook{}
+var _ admission.Validator[*slinkyv1beta1.Accounting] = &AccountingSetWebhook{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *AccountingSetWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	accounting := obj.(*slinkyv1beta1.Accounting)
+func (r *AccountingSetWebhook) ValidateCreate(ctx context.Context, accounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate create", "accounting", klog.KObj(accounting))
 
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *AccountingSetWebhook) ValidateUpdate(ctx context.Context, oldObj runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
-	newAccounting := newObj.(*slinkyv1beta1.Accounting)
-	_ = oldObj.(*slinkyv1beta1.Accounting)
+func (r *AccountingSetWebhook) ValidateUpdate(ctx context.Context, oldAccounting, newAccounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate update", "newAccounting", klog.KObj(newAccounting))
 
 	warns, errs := validateAccounting(newAccounting)
@@ -59,8 +53,7 @@ func (r *AccountingSetWebhook) ValidateUpdate(ctx context.Context, oldObj runtim
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *AccountingSetWebhook) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	accounting := obj.(*slinkyv1beta1.Accounting)
+func (r *AccountingSetWebhook) ValidateDelete(ctx context.Context, accounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate delete", "accounting", klog.KObj(accounting))
 
 	return nil, nil

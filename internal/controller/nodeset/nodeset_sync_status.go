@@ -5,6 +5,7 @@ package nodeset
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -97,7 +99,10 @@ func (r *NodeSetReconciler) syncNodeSetStatus(
 	selectorLabels := labels.NewBuilder().WithWorkerSelectorLabels(nodeset).Build()
 	selector := k8slabels.SelectorFromSet(k8slabels.Set(selectorLabels))
 
-	replicaStatus := r.calculateReplicaStatus(nodeset, pods, currentRevision, updateRevision)
+	replicaStatus, err := r.calculateReplicaStatus(ctx, nodeset, pods, currentRevision, updateRevision)
+	if err != nil {
+		return err
+	}
 	slurmNodeStatus, err := r.slurmControl.CalculateNodeStatus(ctx, nodeset, pods)
 	if err != nil {
 		return err
@@ -109,6 +114,7 @@ func (r *NodeSetReconciler) syncNodeSetStatus(
 		ReadyReplicas:       replicaStatus.Ready,
 		AvailableReplicas:   replicaStatus.Available,
 		UnavailableReplicas: replicaStatus.Unavailable,
+		Desired:             replicaStatus.Desired,
 		SlurmIdle:           slurmNodeStatus.Idle,
 		SlurmAllocated:      slurmNodeStatus.Allocated + slurmNodeStatus.Mixed,
 		SlurmDown:           slurmNodeStatus.Down,
@@ -149,14 +155,16 @@ type replicaStatus struct {
 	Unavailable int32
 	Current     int32
 	Updated     int32
+	Desired     int32
 }
 
 // calculateReplicaStatus will calculate the status of the given pods.
 func (r *NodeSetReconciler) calculateReplicaStatus(
+	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
 	pods []*corev1.Pod,
 	currentRevision, updateRevision *appsv1.ControllerRevision,
-) replicaStatus {
+) (replicaStatus, error) {
 	status := replicaStatus{}
 
 	now := metav1.Now()
@@ -185,10 +193,18 @@ func (r *NodeSetReconciler) calculateReplicaStatus(
 			}
 		}
 	}
-	// Infer the Unavailable replicas
-	status.Unavailable = mathutils.Clamp(status.Replicas-status.Available, 0, status.Replicas)
-
-	return status
+	if nodeset != nil && nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		status.Unavailable = mathutils.Clamp(status.Replicas-status.Available, 0, status.Replicas)
+		status.Desired = ptr.Deref(nodeset.Spec.Replicas, 0)
+	} else if nodeset != nil && nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeDaemonset {
+		desiredNodes, err := r.getDesiredNodeCountForDaemonSet(ctx, nodeset)
+		if err != nil {
+			return status, fmt.Errorf("failed to get desired node count for daemon set: %w", err)
+		}
+		status.Unavailable = mathutils.Clamp(desiredNodes-status.Available, 0, desiredNodes)
+		status.Desired = int32(desiredNodes)
+	}
+	return status, nil
 }
 
 // Sync NodeSet Pod Conditions to reflect Slurm base and flag states
