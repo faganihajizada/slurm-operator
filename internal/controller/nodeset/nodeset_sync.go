@@ -489,7 +489,7 @@ func (r *NodeSetReconciler) syncSlurmNodes(
 
 	syncSlurmNodesFn := func(i int) error {
 		pod := pods[i]
-		isRegistered := registeredSlurmNodeSet.Has(nodesetutils.GetNodeName(pod))
+		isRegistered := registeredSlurmNodeSet.Has(nodesetutils.GetSlurmNodeName(pod))
 		if isRegistered ||
 			!podutils.IsRunningAndAvailable(pod, nodeset.Spec.MinReadySeconds) ||
 			!podutils.IsHealthy(pod) {
@@ -525,7 +525,7 @@ func (r *NodeSetReconciler) syncSlurmDeadline(
 
 	syncSlurmDeadlineFn := func(i int) error {
 		pod := pods[i]
-		slurmNodeName := nodesetutils.GetNodeName(pod)
+		slurmNodeName := nodesetutils.GetSlurmNodeName(pod)
 		deadline := nodeDeadlines.Peek(slurmNodeName)
 
 		toUpdate := pod.DeepCopy()

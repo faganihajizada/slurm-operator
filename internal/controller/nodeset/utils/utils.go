@@ -120,7 +120,7 @@ func initIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 			pod.Spec.Hostname = pod.Name
 		}
 	}
-	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = GetNodeName(pod)
+	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = GetSlurmNodeName(pod)
 	pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode] = string(nodeset.Spec.ScalingMode)
 }
 
@@ -138,7 +138,7 @@ func UpdateIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 		pod.Labels[slinkyv1beta1.LabelNodeSetPodIndex] = paddedOrdinal
 	}
 	pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
-	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = GetNodeName(pod)
+	pod.Labels[slinkyv1beta1.LabelNodeSetPodHostname] = GetSlurmNodeName(pod)
 }
 
 // UpdateStorage updates pod's Volumes to conform with the PersistentVolumeClaim of nodeset's templates. If pod has
@@ -262,8 +262,8 @@ func GetOrdinalPodName(nodeset *slinkyv1beta1.NodeSet, ordinal int) string {
 	return fmt.Sprintf("%s-%s", nodeset.Name, paddedOrdinal)
 }
 
-// GetNodeName returns the Slurm node name
-func GetNodeName(pod *corev1.Pod) string {
+// GetSlurmNodeName returns the Slurm node name.
+func GetSlurmNodeName(pod *corev1.Pod) string {
 	if pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode] == string(slinkyv1beta1.ScalingModeStatefulset) {
 		if pod.Spec.HostNetwork {
 			return pod.Spec.NodeName

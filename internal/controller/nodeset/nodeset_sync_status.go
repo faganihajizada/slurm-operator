@@ -240,7 +240,7 @@ func (r *NodeSetReconciler) updateNodeSetPodConditions(
 	for _, pod := range pods {
 		toUpdate := pod.DeepCopy()
 
-		podConditions := nodeStatus.NodeStates[nodesetutils.GetNodeName(toUpdate)]
+		podConditions := nodeStatus.NodeStates[nodesetutils.GetSlurmNodeName(toUpdate)]
 
 		// Filter previous SlurmNodeStates that are no longer present
 		var filteredConditions []corev1.PodCondition

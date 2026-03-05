@@ -221,7 +221,7 @@ var _ = Describe("Slurm NodeSet", func() {
 				// Register Slurm node for pod
 				node := slurmtypes.V0044Node{
 					V0044Node: slurmapi.V0044Node{
-						Name:  ptr.To(nodesetutils.GetNodeName(&pod)),
+						Name:  ptr.To(nodesetutils.GetSlurmNodeName(&pod)),
 						State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
 					},
 				}

@@ -303,7 +303,7 @@ func TestOrdinalGetPodName(t *testing.T) {
 	}
 }
 
-func TestGetNodeName(t *testing.T) {
+func TestGetSlurmNodeName(t *testing.T) {
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "foo",
@@ -334,8 +334,8 @@ func TestGetNodeName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetNodeName(tt.args.pod); got != tt.want {
-				t.Errorf("GetNodeName() = %v, want %v", got, tt.want)
+			if got := GetSlurmNodeName(tt.args.pod); got != tt.want {
+				t.Errorf("GetSlurmNodeName() = %v, want %v", got, tt.want)
 			}
 		})
 	}
