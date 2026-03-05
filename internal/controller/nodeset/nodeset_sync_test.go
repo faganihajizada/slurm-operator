@@ -28,6 +28,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller/history"
 	taints "k8s.io/kubernetes/pkg/util/taints"
 	"k8s.io/utils/ptr"
+	"k8s.io/utils/set"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -101,6 +102,25 @@ func newNodeSet(name, controllerName string, replicas int32) *slinkyv1beta1.Node
 			},
 		},
 	}
+}
+
+func newNodeSetPodWithStatus(
+	nodeset *slinkyv1beta1.NodeSet,
+	controller *slinkyv1beta1.Controller,
+	ordinal int,
+	podPhase corev1.PodPhase,
+	podConditions []corev1.PodConditionType,
+) *corev1.Pod {
+	pod := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, ordinal, "")
+	pod.Status.Phase = podPhase
+	for _, condType := range podConditions {
+		condition := corev1.PodCondition{
+			Type:   condType,
+			Status: corev1.ConditionTrue,
+		}
+		pod.Status.Conditions = append(pod.Status.Conditions, condition)
+	}
+	return pod
 }
 
 func newClientMap(controllerName string, client slurmclient.Client) *clientmap.ClientMap {
@@ -2864,6 +2884,136 @@ func TestNodeSetReconciler_podsShouldBeOnNode(t *testing.T) {
 			}
 			if !slices.Equal(gotNames, tt.expectedPodNamesToDelete) {
 				t.Errorf("podsToDelete names = %v, want %v", gotNames, tt.expectedPodNamesToDelete)
+			}
+		})
+	}
+}
+
+func TestNodeSetReconciler_syncSlurmNodes(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "slurm",
+		},
+	}
+	type testCase struct {
+		name      string
+		kclient   client.Client
+		clientMap *clientmap.ClientMap
+		nodeset   *slinkyv1beta1.NodeSet
+		pods      []*corev1.Pod
+		wantOk    bool
+		wantErr   bool
+	}
+	tests := []testCase{
+		{
+			name:      "empty",
+			kclient:   fake.NewFakeClient(),
+			clientMap: newClientMap(controller.Name, newFakeClientList(sinterceptor.Funcs{})),
+			nodeset:   newNodeSet("foo", controller.Name, 2),
+		},
+		func() testCase {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			pod0 := newNodeSetPodWithStatus(nodeset, controller, 0, corev1.PodRunning, []corev1.PodConditionType{corev1.PodReady})
+			pod1 := newNodeSetPodWithStatus(nodeset, controller, 1, corev1.PodRunning, []corev1.PodConditionType{corev1.PodReady})
+			kclient := fake.NewFakeClient(nodeset, pod0, pod1)
+			sclient := newFakeClientList(sinterceptor.Funcs{}, &slurmtypes.V0044NodeList{
+				Items: []slurmtypes.V0044Node{
+					{V0044Node: slurmapi.V0044Node{Name: ptr.To(nodesetutils.GetNodeName(pod0))}},
+					{V0044Node: slurmapi.V0044Node{Name: ptr.To(nodesetutils.GetNodeName(pod1))}},
+				},
+			})
+			clientMap := newClientMap(controller.Name, sclient)
+			return testCase{
+				name:      "all are registered",
+				kclient:   kclient,
+				clientMap: clientMap,
+				nodeset:   nodeset,
+				pods: []*corev1.Pod{
+					pod0,
+					pod1,
+				},
+				wantOk: true,
+			}
+		}(),
+		func() testCase {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			pod0 := newNodeSetPodWithStatus(nodeset, controller, 0, corev1.PodRunning, []corev1.PodConditionType{corev1.PodReady})
+			pod1 := newNodeSetPodWithStatus(nodeset, controller, 1, corev1.PodRunning, []corev1.PodConditionType{corev1.PodReady})
+			kclient := fake.NewFakeClient(nodeset, pod0, pod1)
+			sclient := newFakeClientList(sinterceptor.Funcs{}, &slurmtypes.V0044NodeList{
+				Items: []slurmtypes.V0044Node{
+					{V0044Node: slurmapi.V0044Node{Name: ptr.To(nodesetutils.GetNodeName(pod0))}},
+					// {V0044Node: slurmapi.V0044Node{Name: ptr.To(nodesetutils.GetNodeName(pod1))}}, // unregistered
+				},
+			})
+			clientMap := newClientMap(controller.Name, sclient)
+			return testCase{
+				name:      "one unregistered pod",
+				kclient:   kclient,
+				clientMap: clientMap,
+				nodeset:   nodeset,
+				pods: []*corev1.Pod{
+					pod0,
+					pod1,
+				},
+				wantOk: true,
+			}
+		}(),
+		func() testCase {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			pod0 := newNodeSetPodWithStatus(nodeset, controller, 0, corev1.PodRunning, []corev1.PodConditionType{corev1.PodReady})
+			pod1 := newNodeSetPodWithStatus(nodeset, controller, 1, corev1.PodRunning, []corev1.PodConditionType{corev1.PodReady})
+			return testCase{
+				name:      "no client",
+				kclient:   fake.NewFakeClient(nodeset, pod0, pod1),
+				clientMap: clientmap.NewClientMap(),
+				nodeset:   nodeset,
+				pods: []*corev1.Pod{
+					pod0,
+					pod1,
+				},
+				wantOk: false,
+			}
+		}(),
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			r := NewReconciler(tt.kclient, tt.clientMap)
+			gotErr := r.syncSlurmNodes(context.Background(), tt.nodeset, tt.pods)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("syncSlurmNodes() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("syncSlurmNodes() succeeded unexpectedly")
+			}
+			scontrol := slurmcontrol.NewSlurmControl(tt.clientMap)
+			slurmNodeNames, ok, err := scontrol.GetNodesForPods(ctx, tt.nodeset, tt.pods)
+			if err != nil {
+				t.Fatalf("slurmControl failed to get Slurm node names: %v", err)
+			}
+			if !ok {
+				if ok != tt.wantOk {
+					t.Fatal("slurmControl used a client unexpectedly")
+				}
+				return
+			}
+			podList := &corev1.PodList{}
+			if err := tt.kclient.List(ctx, podList); err != nil {
+				t.Fatalf("kclient failed to list pods: %v", err)
+			}
+			if len(podList.Items) != len(slurmNodeNames) {
+				t.Errorf("syncSlurmNodes() unregistered Slurm node but healthy pod was not deleted")
+			}
+			slurmNodeNameSet := set.New(slurmNodeNames...)
+			for _, pod := range podList.Items {
+				slurmNodeName := nodesetutils.GetNodeName(&pod)
+				if !slurmNodeNameSet.Has(slurmNodeName) {
+					t.Errorf("syncSlurmNodes() unexpected pod exists: %v", slurmNodeName)
+				}
 			}
 		})
 	}

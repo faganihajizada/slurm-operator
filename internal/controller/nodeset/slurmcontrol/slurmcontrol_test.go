@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -2150,6 +2151,107 @@ func Test_realSlurmControl_GetNodeDeadlines(t *testing.T) {
 					t.Errorf("timestamp = %v, after = %v", ts, ts.After(now))
 				}
 
+			}
+		})
+	}
+}
+
+func Test_realSlurmControl_GetNodesForPods(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "slurm",
+		},
+	}
+	kclient := kubefake.NewFakeClient()
+	type clientData struct {
+		nodeList *types.V0044NodeList
+	}
+	type testCase struct {
+		name       string
+		clientData clientData
+		nodeset    *slinkyv1beta1.NodeSet
+		pods       []*corev1.Pod
+		want       []string
+		wantOk     bool
+		wantErr    bool
+	}
+	tests := []testCase{
+		func() testCase {
+			nodeset := newNodeSet("foo", controller.Name, 1)
+			pod := nodesetutils.NewNodeSetStatefulSetPod(kclient, nodeset, controller, 0, "")
+			return testCase{
+				name:    "empty",
+				nodeset: nodeset,
+				clientData: clientData{
+					nodeList: &types.V0044NodeList{},
+				},
+				pods: []*corev1.Pod{
+					pod,
+				},
+				want: []string{},
+			}
+		}(),
+		func() testCase {
+			ns0 := newNodeSet("ns0", controller.Name, 2)
+			ns0pod0 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 0, "")
+			ns0pod1 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 1, "")
+			ns0pod0name := nodesetutils.GetNodeName(ns0pod0)
+			ns0pod1name := nodesetutils.GetNodeName(ns0pod1)
+			ns1 := newNodeSet("ns1", controller.Name, 2)
+			ns1pod0 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns1, controller, 0, "")
+			ns1pod1 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns1, controller, 1, "")
+			ns1pod0name := nodesetutils.GetNodeName(ns1pod0)
+			ns1pod1name := nodesetutils.GetNodeName(ns1pod1)
+			return testCase{
+				name:    "mixed",
+				nodeset: ns0,
+				clientData: clientData{
+					nodeList: &types.V0044NodeList{
+						Items: []types.V0044Node{
+							{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+							{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+							{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+							{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+						},
+					},
+				},
+				pods: []*corev1.Pod{
+					ns0pod0,
+					ns0pod1,
+				},
+				want: []string{
+					ns0pod0name,
+					ns0pod1name,
+				},
+				wantOk: true,
+			}
+		}(),
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sclient := fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(tt.clientData.nodeList).Build()
+			controllerName := tt.nodeset.Spec.ControllerRef.Name
+			r := NewSlurmControl(newSlurmClientMap(controllerName, sclient))
+			got, ok, gotErr := r.GetNodesForPods(context.Background(), tt.nodeset, tt.pods)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("GetNodesForPods() failed: %v", gotErr)
+				}
+				return
+			}
+			if !ok {
+				if ok != tt.wantOk {
+					t.Fatalf("GetNodesForPods() ok %v, want %v", ok, tt.wantOk)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("GetNodesForPods() succeeded unexpectedly")
+			}
+			slices.Sort(got)
+			slices.Sort(tt.want)
+			if !apiequality.Semantic.DeepEqual(got, tt.want) {
+				t.Errorf("GetNodesForPods() = %v, want %v", got, tt.want)
 			}
 		})
 	}
