@@ -63,18 +63,6 @@ func validateNodeSet(nodeset *slinkyv1beta1.NodeSet) (admission.Warnings, []erro
 	var warns admission.Warnings
 	var errs []error
 
-	switch nodeset.Spec.UpdateStrategy.Type {
-	case "":
-		// valid but will default
-	case slinkyv1beta1.RollingUpdateNodeSetStrategyType:
-		// valid
-	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
-		// valid
-	default:
-		errs = append(errs, fmt.Errorf("`NodeSet.Spec.UpdateStrategy.Type` is not valid. Got: %v. Expected of: %s; %s",
-			nodeset.Spec.UpdateStrategy.Type, slinkyv1beta1.RollingUpdateNodeSetStrategyType, slinkyv1beta1.OnDeleteNodeSetStrategyType))
-	}
-
 	if nodeset.Spec.PersistentVolumeClaimRetentionPolicy != nil {
 		switch nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted {
 		case slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType:

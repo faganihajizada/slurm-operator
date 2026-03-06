@@ -169,8 +169,11 @@ type NodeSetSsh struct {
 // parameters necessary to perform the update for the indicated strategy.
 type NodeSetUpdateStrategy struct {
 	// Type indicates the type of the NodeSetUpdateStrategy.
+	// One of: RollingUpdate; OnDelete.
 	// Default is RollingUpdate.
 	// +optional
+	// +kubebuilder:validation:Enum=RollingUpdate;OnDelete
+	// +kubebuilder:default:=RollingUpdate
 	Type NodeSetUpdateStrategyType `json:"type,omitempty"`
 
 	// RollingUpdate is used to communicate parameters when Type is
