@@ -5,7 +5,6 @@ package webhook
 
 import (
 	"context"
-	"fmt"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
@@ -62,27 +61,6 @@ func (r *NodeSetWebhook) ValidateDelete(ctx context.Context, nodeset *slinkyv1be
 func validateNodeSet(nodeset *slinkyv1beta1.NodeSet) (admission.Warnings, []error) {
 	var warns admission.Warnings
 	var errs []error
-
-	if nodeset.Spec.PersistentVolumeClaimRetentionPolicy != nil {
-		switch nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted {
-		case slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType:
-			// valid
-		case slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType:
-			// valid
-		default:
-			errs = append(errs, fmt.Errorf("`NodeSet.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted` is not valid. Got: %v. Expected of: %s; %s",
-				nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted, slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType, slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType))
-		}
-		switch nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled {
-		case slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType:
-			// valid
-		case slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType:
-			// valid
-		default:
-			errs = append(errs, fmt.Errorf("`NodeSet.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled` is not valid. Got: %v. Expected of: %s; %s",
-				nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled, slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType, slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType))
-		}
-	}
 
 	return warns, errs
 }

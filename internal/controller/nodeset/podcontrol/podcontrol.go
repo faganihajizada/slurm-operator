@@ -517,14 +517,17 @@ func updateClaimOwnerRefForSetAndPod(logger klog.Logger, claim *corev1.Persisten
 	claim.SetOwnerReferences(refs)
 }
 
-// getPersistentVolumeClaimPolicy returns the PVC policy for a NodeSet, returning a retain policy if the nodeset policy is nil.
+// getPersistentVolumeClaimRetentionPolicy returns the PVC policy for a NodeSet, defaulting to retain when fields are unset.
 func getPersistentVolumeClaimRetentionPolicy(nodeset *slinkyv1beta1.NodeSet) slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy {
 	policy := slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
 		WhenDeleted: slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 		WhenScaled:  slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 	}
-	if nodeset.Spec.PersistentVolumeClaimRetentionPolicy != nil {
-		policy = *nodeset.Spec.PersistentVolumeClaimRetentionPolicy
+	if nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted != "" {
+		policy.WhenDeleted = nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted
+	}
+	if nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled != "" {
+		policy.WhenScaled = nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled
 	}
 	return policy
 }

@@ -107,7 +107,7 @@ type NodeSetSpec struct {
 	// created from the NodeSet VolumeClaimTemplates. This requires the
 	// NodeSetAutoDeletePVC feature gate to be enabled, which is alpha.
 	// +optional
-	PersistentVolumeClaimRetentionPolicy *NodeSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
+	PersistentVolumeClaimRetentionPolicy NodeSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 
 	// minReadySeconds is the minimum number of seconds for which a newly
 	// created NodeSet Pod should be ready without any of its container crashing,
@@ -208,6 +208,8 @@ type NodeSetPersistentVolumeClaimRetentionPolicy struct {
 	// VolumeClaimTemplates when the NodeSet is deleted. The default policy
 	// of `Retain` causes PVCs to not be affected by NodeSet deletion. The
 	// `Delete` policy causes those PVCs to be deleted.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	// +kubebuilder:default:=Retain
 	WhenDeleted PersistentVolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
 
 	// WhenScaled specifies what happens to PVCs created from NodeSet
@@ -215,6 +217,8 @@ type NodeSetPersistentVolumeClaimRetentionPolicy struct {
 	// policy of `Retain` causes PVCs to not be affected by a scaledown. The
 	// `Delete` policy causes the associated PVCs for any excess pods to be
 	// deleted.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	// +kubebuilder:default:=Retain
 	WhenScaled PersistentVolumeClaimRetentionPolicyType `json:"whenScaled,omitempty"`
 }
 
