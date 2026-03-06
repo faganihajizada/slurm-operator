@@ -112,9 +112,10 @@ func initIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 	UpdateIdentity(nodeset, pod)
 	// Set these immutable fields only on initial Pod creation, not updates.
 	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
+		ordinal := GetOrdinal(pod)
+		paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
+		pod.Name = GetOrdinalPodName(nodeset, ordinal)
 		if pod.Spec.Hostname != "" {
-			ordinal := GetOrdinal(pod)
-			paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
 			pod.Spec.Hostname = fmt.Sprintf("%s%s", pod.Spec.Hostname, paddedOrdinal)
 		} else {
 			pod.Spec.Hostname = pod.Name
@@ -124,8 +125,7 @@ func initIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 	pod.Labels[slinkyv1beta1.LabelNodeSetScalingMode] = string(nodeset.Spec.ScalingMode)
 }
 
-// UpdateIdentity updates pod's name, hostname, and subdomain, and StatefulSetPodNameLabel to conform to nodeset's name
-// and headless service.
+// UpdateIdentity updates pod's labels.
 func UpdateIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 	pod.Namespace = nodeset.Namespace
 	if pod.Labels == nil {
@@ -134,7 +134,6 @@ func UpdateIdentity(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) {
 	if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
 		ordinal := GetOrdinal(pod)
 		paddedOrdinal := GetPaddedOrdinal(nodeset, ordinal)
-		pod.Name = GetOrdinalPodName(nodeset, ordinal)
 		pod.Labels[slinkyv1beta1.LabelNodeSetPodIndex] = paddedOrdinal
 	}
 	pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
@@ -283,7 +282,6 @@ func IsIdentityMatch(nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) bool {
 		parent, ordinal := GetParentNameAndOrdinal(pod)
 		return ordinal >= 0 &&
 			nodeset.Name == parent &&
-			pod.Name == GetOrdinalPodName(nodeset, ordinal) &&
 			pod.Namespace == nodeset.Namespace &&
 			pod.Labels[slinkyv1beta1.LabelNodeSetPodName] == pod.Name
 	}

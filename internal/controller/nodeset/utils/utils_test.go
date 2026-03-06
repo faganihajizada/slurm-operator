@@ -411,6 +411,22 @@ func TestIsIdentityMatch(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "StatefulSet match when ordinalPadding changed (pod name immutable e.g. foo-0 vs nodeset now padding 2)",
+			args: args{
+				nodeset: func() *slinkyv1beta1.NodeSet {
+					ns := newNodeSet("foo")
+					ns.Spec.OrdinalPadding = 2
+					return ns
+				}(),
+				pod: func() *corev1.Pod {
+					pod := NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, "")
+					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
+					return pod
+				}(),
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
