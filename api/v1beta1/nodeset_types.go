@@ -240,8 +240,9 @@ type RollingUpdateNodeSetStrategy struct {
 	// The maximum number of pods that can be unavailable during the update.
 	// Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
 	// Absolute number is calculated from percentage by rounding up. This can not be 0.
-	// Defaults to 1.
+	// Defaults to 25%.
 	// +optional
+	// +kubebuilder:default:="25%"
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
