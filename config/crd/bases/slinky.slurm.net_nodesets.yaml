@@ -119,8 +119,9 @@ spec:
                 type: integer
               ordinalPadding:
                 default: 0
-                description: OrdinalPadding indicates how many places to pad with
-                  zeroes when constructing the ordinal.
+                description: |-
+                  OrdinalPadding indicates how many digit places to pad with zeroes when constructing the pod ordinal.
+                  This is used only when `scalingMode=StatefulSet`.
                 type: integer
               partition:
                 description: Partition defines the Slurm partition configuration for

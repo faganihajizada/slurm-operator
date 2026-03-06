@@ -303,7 +303,7 @@ func TestOrdinalGetPodName(t *testing.T) {
 	}
 }
 
-func TestGetNodeName(t *testing.T) {
+func TestGetSlurmNodeName(t *testing.T) {
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "foo",
@@ -334,8 +334,8 @@ func TestGetNodeName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetNodeName(tt.args.pod); got != tt.want {
-				t.Errorf("GetNodeName() = %v, want %v", got, tt.want)
+			if got := GetSlurmNodeName(tt.args.pod); got != tt.want {
+				t.Errorf("GetSlurmNodeName() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -410,6 +410,22 @@ func TestIsIdentityMatch(t *testing.T) {
 				}(),
 			},
 			want: false,
+		},
+		{
+			name: "StatefulSet match when ordinalPadding changed (pod name immutable e.g. foo-0 vs nodeset now padding 2)",
+			args: args{
+				nodeset: func() *slinkyv1beta1.NodeSet {
+					ns := newNodeSet("foo")
+					ns.Spec.OrdinalPadding = 2
+					return ns
+				}(),
+				pod: func() *corev1.Pod {
+					pod := NewNodeSetStatefulSetPod(fake.NewFakeClient(), newNodeSet("foo"), controller, 0, "")
+					pod.Labels[slinkyv1beta1.LabelNodeSetPodName] = pod.Name
+					return pod
+				}(),
+			},
+			want: true,
 		},
 	}
 	for _, tt := range tests {

@@ -189,11 +189,14 @@ func getPatch(nodeset *slinkyv1beta1.NodeSet) ([]byte, error) {
 	objCopy := make(map[string]any)
 	specCopy := make(map[string]any)
 
-	// Create a patch of the NodeSet that replaces spec.template
 	spec := raw["spec"].(map[string]any)
 	template := spec["template"].(map[string]any)
 	specCopy["template"] = template
 	template["$patch"] = "replace"
+
+	// NOTE: Anything outside of pod template but should be included in the
+	// revision patch must be manually added here.
+	specCopy["ordinalPadding"] = nodeset.Spec.OrdinalPadding
 	if slurmd, ok := spec["slurmd"].(map[string]any); ok {
 		slurmd["$patch"] = "replace"
 		specCopy["slurmd"] = slurmd
@@ -209,6 +212,7 @@ func getPatch(nodeset *slinkyv1beta1.NodeSet) ([]byte, error) {
 		ssh["$patch"] = "replace"
 		specCopy["ssh"] = ssh
 	}
+
 	objCopy["spec"] = specCopy
 	patch, err := json.Marshal(objCopy)
 	return patch, err

@@ -116,7 +116,8 @@ type NodeSetSpec struct {
 	// +optional
 	MinReadySeconds int32 `json:"minReadySeconds,omitempty"`
 
-	// OrdinalPadding indicates how many places to pad with zeroes when constructing the ordinal.
+	// OrdinalPadding indicates how many digit places to pad with zeroes when constructing the pod ordinal.
+	// This is used only when `scalingMode=StatefulSet`.
 	// +optional
 	// +default:=0
 	OrdinalPadding uint `json:"ordinalPadding,omitempty"`
