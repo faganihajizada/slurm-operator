@@ -196,6 +196,7 @@ func getPatch(nodeset *slinkyv1beta1.NodeSet) ([]byte, error) {
 
 	// NOTE: Anything outside of pod template but should be included in the
 	// revision patch must be manually added here.
+	specCopy["ordinalPadding"] = nodeset.Spec.OrdinalPadding
 	if slurmd, ok := spec["slurmd"].(map[string]any); ok {
 		slurmd["$patch"] = "replace"
 		specCopy["slurmd"] = slurmd
