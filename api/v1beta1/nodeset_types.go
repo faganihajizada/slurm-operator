@@ -139,7 +139,7 @@ type NodeSetSpec struct {
 // NodeSetPartition defines the Slurm partition configuration for the NodeSet.
 type NodeSetPartition struct {
 	// Enabled will create a partition for this NodeSet.
-	// +default:=true
+	// +default:=false
 	Enabled bool `json:"enabled"`
 
 	// Config is added to the NodeSet's partition line.
