@@ -113,7 +113,7 @@ func newNodeSetWithVolumes(replicas int32, name string, petMounts []corev1.Volum
 				WhenScaled:  slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 				WhenDeleted: slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 			},
-			RevisionHistoryLimit: ptr.To[int32](2),
+			RevisionHistoryLimit: 2,
 		},
 	}
 }

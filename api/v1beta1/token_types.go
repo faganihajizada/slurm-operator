@@ -35,7 +35,7 @@ type TokenSpec struct {
 	// If set to false, then the secret will be created as immutable.
 	// +optional
 	// +default:=true
-	Refresh bool `json:"refresh,omitzero"`
+	Refresh *bool `json:"refresh,omitzero"`
 
 	// SecretRef describes how to create the secret containing the JWT.
 	// +optional

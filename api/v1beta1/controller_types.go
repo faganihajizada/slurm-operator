@@ -124,7 +124,7 @@ type ControllerSpec struct {
 type ControllerPersistence struct {
 	// Enabled controls if the optional accounting subsystem is enabled.
 	// +default:=true
-	Enabled bool `json:"enabled"`
+	Enabled *bool `json:"enabled"`
 
 	// ExistingClaim is the name of an existing `PersistentVolumeClaim` to use instead.
 	// If this is not empty, then certain other fields will be ignored.

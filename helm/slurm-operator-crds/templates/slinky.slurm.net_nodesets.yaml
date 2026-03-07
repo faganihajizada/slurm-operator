@@ -170,6 +170,7 @@ spec:
                     type: string
                 type: object
               replicas:
+                default: 1
                 description: |-
                   replicas is the desired number of replicas of the given Template.
                   These are replicas in the sense that they are instantiations of the
@@ -179,6 +180,7 @@ spec:
                 format: int32
                 type: integer
               revisionHistoryLimit:
+                default: 0
                 description: |-
                   revisionHistoryLimit is the maximum number of revisions that will
                   be maintained in the NodeSet's revision history. The revision history

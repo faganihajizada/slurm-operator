@@ -8,9 +8,11 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/controller/token/slurmjwt"
+	"github.com/SlinkyProject/slurm-operator/internal/defaults"
 )
 
 func (b *CommonBuilder) BuildTokenSecret(token *slinkyv1beta1.Token) (*corev1.Secret, error) {
@@ -39,7 +41,7 @@ func (b *CommonBuilder) BuildTokenSecret(token *slinkyv1beta1.Token) (*corev1.Se
 		StringData: map[string]string{
 			token.SecretRef().Key: authToken,
 		},
-		Immutable: !token.Spec.Refresh,
+		Immutable: !ptr.Deref(token.Spec.Refresh, defaults.DefaultTokenRefresh),
 	}
 
 	jwtHs256Secret := &corev1.Secret{}

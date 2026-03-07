@@ -55,7 +55,7 @@ func TestBuilder_BuildController(t *testing.T) {
 					},
 					Spec: slinkyv1beta1.ControllerSpec{
 						Persistence: slinkyv1beta1.ControllerPersistence{
-							Enabled: true,
+							Enabled: ptr.To(true),
 						},
 					},
 				},
@@ -73,7 +73,7 @@ func TestBuilder_BuildController(t *testing.T) {
 					},
 					Spec: slinkyv1beta1.ControllerSpec{
 						Persistence: slinkyv1beta1.ControllerPersistence{
-							Enabled:       true,
+							Enabled:       ptr.To(true),
 							ExistingClaim: "pvc",
 						},
 					},

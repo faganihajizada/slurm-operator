@@ -28,6 +28,7 @@ type LoginSetSpec struct {
 	// same Template, but individual replicas also have a consistent identity.
 	// If unspecified, defaults to 1.
 	// +optional
+	// +default:=1
 	Replicas *int32 `json:"replicas,omitempty"`
 
 	// The login container configuration.

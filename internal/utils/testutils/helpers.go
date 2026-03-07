@@ -57,6 +57,9 @@ func NewController(name string, slurmKeyRef, jwtHs256KeyRef corev1.SecretKeySele
 					Image: "alpine",
 				},
 			},
+			Persistence: slinkyv1beta1.ControllerPersistence{
+				Enabled: ptr.To(false),
+			},
 		},
 	}
 }

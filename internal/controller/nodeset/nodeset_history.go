@@ -12,7 +12,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/controller/history"
-	"k8s.io/utils/ptr"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/historycontrol"
@@ -53,7 +52,7 @@ func (r *NodeSetReconciler) truncateHistory(
 		}
 	}
 	historyLen := len(history)
-	historyLimit := int(ptr.Deref(nodeset.Spec.RevisionHistoryLimit, 0))
+	historyLimit := int(nodeset.Spec.RevisionHistoryLimit)
 	if historyLen <= historyLimit {
 		return nil
 	}

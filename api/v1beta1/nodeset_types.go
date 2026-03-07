@@ -41,6 +41,7 @@ type NodeSetSpec struct {
 	// If unspecified, defaults to 1.
 	// When ScalingMode is daemonset, this field is ignored.
 	// +optional
+	// +default:=1
 	Replicas *int32 `json:"replicas,omitempty"`
 
 	// ScalingMode controls how the NodeSet scales pods.
@@ -101,7 +102,8 @@ type NodeSetSpec struct {
 	// consists of all revisions not represented by a currently applied
 	// NodeSetSpec version. The default value is 0.
 	// +optional
-	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
+	// +default:=0
+	RevisionHistoryLimit int32 `json:"revisionHistoryLimit,omitempty"`
 
 	// PersistentVolumeClaimRetentionPolicy describes the policy used for PVCs
 	// created from the NodeSet VolumeClaimTemplates. This requires the
@@ -133,7 +135,7 @@ type NodeSetSpec struct {
 	// See https://kubernetes.io/docs/tasks/run-application/configure-pdb/ for more information.
 	// +optional
 	// +default:=true
-	WorkloadDisruptionProtection bool `json:"workloadDisruptionProtection,omitempty"`
+	WorkloadDisruptionProtection *bool `json:"workloadDisruptionProtection,omitempty"`
 }
 
 // NodeSetPartition defines the Slurm partition configuration for the NodeSet.
