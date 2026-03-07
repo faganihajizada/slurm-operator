@@ -1675,7 +1675,7 @@ func TestNodeSetReconciler_syncUpdate(t *testing.T) {
 		func() testCaseFields {
 			nodeset := newNodeSet("foo", controller.Name, 2)
 			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
-			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
+			nodeset.Spec.UpdateStrategy.RollingUpdate = slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
 			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
@@ -1751,7 +1751,7 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 		func() testCaseFields {
 			nodeset := newNodeSet("foo", controller.Name, 2)
 			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
-			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
+			nodeset.Spec.UpdateStrategy.RollingUpdate = slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
 			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
@@ -1794,7 +1794,7 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 		func() testCaseFields {
 			nodeset := newNodeSet("foo", controller.Name, 2)
 			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
-			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
+			nodeset.Spec.UpdateStrategy.RollingUpdate = slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
 			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
@@ -1837,7 +1837,7 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 		func() testCaseFields {
 			nodeset := newNodeSet("foo", controller.Name, 2)
 			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
-			nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
+			nodeset.Spec.UpdateStrategy.RollingUpdate = slinkyv1beta1.RollingUpdateNodeSetStrategy{
 				MaxUnavailable: ptr.To(intstr.FromString("10%")),
 			}
 			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
@@ -1963,7 +1963,7 @@ func TestNodeSetReconciler_splitUpdatePods(t *testing.T) {
 				nodeset: func() *slinkyv1beta1.NodeSet {
 					nodeset := newNodeSet("foo", controller.Name, 0)
 					nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
-					nodeset.Spec.UpdateStrategy.RollingUpdate = &slinkyv1beta1.RollingUpdateNodeSetStrategy{
+					nodeset.Spec.UpdateStrategy.RollingUpdate = slinkyv1beta1.RollingUpdateNodeSetStrategy{
 						MaxUnavailable: ptr.To(intstr.FromString("100%")),
 					}
 					return nodeset
