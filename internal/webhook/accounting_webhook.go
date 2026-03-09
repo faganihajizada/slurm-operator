@@ -6,7 +6,6 @@ package webhook
 import (
 	"context"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -47,9 +46,7 @@ func (r *AccountingSetWebhook) ValidateCreate(ctx context.Context, accounting *s
 func (r *AccountingSetWebhook) ValidateUpdate(ctx context.Context, oldAccounting, newAccounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate update", "newAccounting", klog.KObj(newAccounting))
 
-	warns, errs := validateAccounting(newAccounting)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -57,11 +54,4 @@ func (r *AccountingSetWebhook) ValidateDelete(ctx context.Context, accounting *s
 	accountinglog.Info("validate delete", "accounting", klog.KObj(accounting))
 
 	return nil, nil
-}
-
-func validateAccounting(obj *slinkyv1beta1.Accounting) (admission.Warnings, []error) {
-	var warns admission.Warnings
-	var errs []error
-
-	return warns, errs
 }

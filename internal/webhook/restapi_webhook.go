@@ -6,7 +6,6 @@ package webhook
 import (
 	"context"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -40,18 +39,14 @@ var _ admission.Validator[*slinkyv1beta1.RestApi] = &RestapiWebhook{}
 func (r *RestapiWebhook) ValidateCreate(ctx context.Context, restapi *slinkyv1beta1.RestApi) (admission.Warnings, error) {
 	restapilog.Info("validate create", "restapi", klog.KObj(restapi))
 
-	warns, errs := validateRestapi(restapi)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *RestapiWebhook) ValidateUpdate(ctx context.Context, oldRestapi, newRestapi *slinkyv1beta1.RestApi) (admission.Warnings, error) {
 	restapilog.Info("validate update", "newRestapi", klog.KObj(newRestapi))
 
-	warns, errs := validateRestapi(newRestapi)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -59,11 +54,4 @@ func (r *RestapiWebhook) ValidateDelete(ctx context.Context, restapi *slinkyv1be
 	restapilog.Info("validate delete", "restapi", klog.KObj(restapi))
 
 	return nil, nil
-}
-
-func validateRestapi(restapi *slinkyv1beta1.RestApi) (admission.Warnings, []error) {
-	var warns admission.Warnings
-	var errs []error
-
-	return warns, errs
 }

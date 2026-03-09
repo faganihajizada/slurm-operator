@@ -6,7 +6,6 @@ package webhook
 import (
 	"context"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -40,18 +39,14 @@ var _ admission.Validator[*slinkyv1beta1.Token] = &TokenWebhook{}
 func (r *TokenWebhook) ValidateCreate(ctx context.Context, token *slinkyv1beta1.Token) (admission.Warnings, error) {
 	tokenlog.Info("validate create", "token", klog.KObj(token))
 
-	warns, errs := validateToken(token)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *TokenWebhook) ValidateUpdate(ctx context.Context, oldToken, newToken *slinkyv1beta1.Token) (admission.Warnings, error) {
 	tokenlog.Info("validate update", "newToken", klog.KObj(newToken))
 
-	warns, errs := validateToken(newToken)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -59,11 +54,4 @@ func (r *TokenWebhook) ValidateDelete(ctx context.Context, token *slinkyv1beta1.
 	tokenlog.Info("validate delete", "token", klog.KObj(token))
 
 	return nil, nil
-}
-
-func validateToken(token *slinkyv1beta1.Token) (admission.Warnings, []error) {
-	var warns admission.Warnings
-	var errs []error
-
-	return warns, errs
 }
