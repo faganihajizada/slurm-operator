@@ -215,33 +215,44 @@ See [versioning] for more details.
 
 ### 1.Y Releases
 
-Breaking changes may be introduced into newer [CRDs]. To upgrade between `v1.Y`
-versions (e.g. `v1.0.Z` => `v1.1.Z`), upgrade the slurm-operator-crds chart
-followed by the slurm-operator chart. Any Slurm charts will automatically be
-handled via CRD conversion; no further action is required. It is still
-recommended to upgrade Slurm charts to make use of the new features and
-functionality.
+New Slinky versions may update the Slinky [CRDs] with new fields and deprecate
+old ones. During CRD version changes (e.g. `v1beta1` => `v1beta2`), deprecated
+fields may be removed. Through the Kubernetes API, CRD versions are
+automatically converted to the stored version. Therefore old CRD versions will
+still work, but it is recommended to use the new CRD version as indicated by the
+installed Slinky CRDs.
+
+To upgrade between Slinky `v1.Y` versions (e.g. `v1.0.Z` => `v1.1.Z`), upgrade
+the slurm-operator-crds chart followed by the slurm-operator chart, or both at
+the same time by upgrading the slurm-operator chart when using
+`crds.enabled=true`.
 
 ```bash
-helm upgrade slurm-operator-crds oci://ghcr.io/slinkyproject/charts/slurm-operator-crds
+helm upgrade slurm-operator-crds oci://ghcr.io/slinkyproject/charts/slurm-operator-crds \
+  --version $SLINKY_VERSION
 helm upgrade slurm-operator oci://ghcr.io/slinkyproject/charts/slurm-operator \
-  --namespace=slinky
+  --namespace slinky --version $SLINKY_VERSION
 ```
 
-To make use of new Slinky CRD features, please review changes made to the CRDs
-and the Slurm chart. Update your values.yaml appropriately and upgrade the
-chart.
+All Slurm charts may remain on the old Slinky release series (e.g. `v1.0.x`)
+despite the slurm-operator and its CRDs being on a newer Slinky release series
+(e.g. `v1.1.x`). It is still recommended to upgrade Slurm charts to the new
+Slinky release series coinciding with the slurm-operator's Slinky release series
+to make use of the new fields, features, and functionality.
+
+Please review changes made to the CRDs and the Slurm chart. Update your
+`values.yaml` appropriately and upgrade the Slurm chart.
 
 ```sh
 helm upgrade slurm oci://ghcr.io/slinkyproject/charts/slurm \
-  --namespace=slurm
+  --namespace slurm --version $SLINKY_VERSION
 ```
 
 ### 0.Y Releases
 
-Breaking changes may be introduced into existing [CRDs]. To upgrade between
-`v0.Y` versions (e.g. `v0.1.Z` => `v0.2.Z`), uninstall all Slinky charts and
-delete Slinky CRDs, then install the new release like normal.
+Breaking changes may be introduced into existing Slinky [CRDs] versions. To
+upgrade between `v0.Y` versions (e.g. `v0.1.Z` => `v0.2.Z`), uninstall all
+Slinky charts and delete Slinky CRDs, then install the new release like normal.
 
 ```bash
 helm --namespace=slurm uninstall slurm
