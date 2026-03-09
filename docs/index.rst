@@ -250,11 +250,10 @@ its CRDs:
 
 .. code:: sh
 
-   helm repo add jetstack https://charts.jetstack.io
-   helm repo update
-   helm install cert-manager jetstack/cert-manager \
-     --set 'crds.enabled=true' \
-     --namespace cert-manager --create-namespace
+   helm install \
+     cert-manager oci://quay.io/jetstack/charts/cert-manager \
+     --namespace cert-manager --create-namespace \
+     --set crds.enabled=true
 
 Install the slurm-operator and its CRDs:
 
