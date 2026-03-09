@@ -370,13 +370,13 @@ golangci-lint: golangci-lint-bin ## Run golangci-lint.
 golangci-lint-fmt: golangci-lint-bin ## Run golangci-lint fmt.
 	$(GOLANGCI_LINT) fmt
 
-CODECOV_PERCENT ?= 66
+CODECOV_PERCENT ?= 70
 
 .PHONY: test
 test: envtest ## Run tests.
 	rm -f cover.out cover.html
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
-	go test `go list ./... | grep -v "/api" | grep -v "/e2e"` -v -coverprofile cover.out
+	go test `go list ./... | grep -v "/api" | grep -v "/e2e" | grep -v '/test'` -v -coverprofile cover.out
 	go tool cover -func cover.out
 	go tool cover -html cover.out -o cover.html
 	@percentage=$$(go tool cover -func=cover.out | grep ^total | awk '{print $$3}' | tr -d '%'); \
