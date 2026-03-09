@@ -101,11 +101,11 @@ func newNodeSetWithVolumes(name string, petMounts []corev1.VolumeMount, podMount
 			UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
 				Type: slinkyv1beta1.RollingUpdateNodeSetStrategyType,
 			},
-			PersistentVolumeClaimRetentionPolicy: &slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
+			PersistentVolumeClaimRetentionPolicy: slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
 				WhenScaled:  slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 				WhenDeleted: slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 			},
-			RevisionHistoryLimit: ptr.To[int32](2),
+			RevisionHistoryLimit: 2,
 		},
 	}
 }

@@ -109,11 +109,11 @@ func newNodeSetWithVolumes(replicas int32, name string, petMounts []corev1.Volum
 			UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
 				Type: slinkyv1beta1.RollingUpdateNodeSetStrategyType,
 			},
-			PersistentVolumeClaimRetentionPolicy: &slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
+			PersistentVolumeClaimRetentionPolicy: slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
 				WhenScaled:  slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 				WhenDeleted: slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 			},
-			RevisionHistoryLimit: ptr.To[int32](2),
+			RevisionHistoryLimit: 2,
 		},
 	}
 }
@@ -564,7 +564,7 @@ func Test_realPodControl_IsPodPVCsStale(t *testing.T) {
 		nodeset.Name = "set"
 		nodeset.Spec.ScalingMode = slinkyv1beta1.ScalingModeStatefulset
 		nodeset.Namespace = corev1.NamespaceDefault
-		nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
+		nodeset.Spec.PersistentVolumeClaimRetentionPolicy = slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
 			WhenDeleted: slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType,
 			WhenScaled:  slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType,
 		}
@@ -811,7 +811,7 @@ func Test_isClaimOwnerUpToDate(t *testing.T) {
 					nodeset.Name = "nodeset"
 					nodeset.Spec.ScalingMode = slinkyv1beta1.ScalingModeStatefulset
 					nodeset.GetObjectMeta().SetUID("ss-456")
-					nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
+					nodeset.Spec.PersistentVolumeClaimRetentionPolicy = slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
 						WhenScaled:  tc.scaleDownPolicy,
 						WhenDeleted: tc.setDeletePolicy,
 					}
@@ -1022,7 +1022,7 @@ func TestEdgeCases_isClaimOwnerUpToDate(t *testing.T) {
 		nodeset.Name = "nodeset"
 		nodeset.Spec.ScalingMode = slinkyv1beta1.ScalingModeStatefulset
 		nodeset.GetObjectMeta().SetUID("ss-456")
-		nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &tc.policy
+		nodeset.Spec.PersistentVolumeClaimRetentionPolicy = tc.policy
 		claim.SetOwnerReferences(tc.ownerRefs)
 		got := isClaimOwnerUpToDate(logger, &claim, &nodeset, &pod)
 		if got != tc.shouldMatch {
@@ -1207,7 +1207,6 @@ func Test_hasUnexpectedController(t *testing.T) {
 		pod := &corev1.Pod{}
 		pod.SetName("pod")
 		pod.SetUID("pod-uid")
-		nodeset.Spec.PersistentVolumeClaimRetentionPolicy = nil
 		if hasUnexpectedController(target, nodeset, pod) {
 			t.Errorf("Any controller should be allowed when no retention policy (retain behavior) is specified. Incorrectly identified unexpected controller at %s", tc.name)
 		}
@@ -1219,7 +1218,7 @@ func Test_hasUnexpectedController(t *testing.T) {
 			{WhenDeleted: deletePolicy, WhenScaled: retainPolicy},
 			{WhenDeleted: deletePolicy, WhenScaled: deletePolicy},
 		} {
-			nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &policy
+			nodeset.Spec.PersistentVolumeClaimRetentionPolicy = policy
 			got := hasUnexpectedController(target, nodeset, pod)
 			if got != tc.shouldReportUnexpectedController {
 				t.Errorf("Unexpected controller mismatch at %s (policy %v)", tc.name, policy)
@@ -1497,7 +1496,7 @@ func Test_updateClaimOwnerRefForSetAndPod(t *testing.T) {
 			numReplicas := int32(5)
 			nodeset.Spec.Replicas = &numReplicas
 			nodeset.SetUID("nss-123")
-			nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
+			nodeset.Spec.PersistentVolumeClaimRetentionPolicy = slinkyv1beta1.NodeSetPersistentVolumeClaimRetentionPolicy{
 				WhenScaled:  tc.scaleDownPolicy,
 				WhenDeleted: tc.setDeletePolicy,
 			}
@@ -1609,12 +1608,12 @@ func Test_getPersistentVolumeClaimRetentionPolicy(t *testing.T) {
 
 	nodeset := slinkyv1beta1.NodeSet{}
 	nodeset.Spec.ScalingMode = slinkyv1beta1.ScalingModeStatefulset
-	nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &retainPolicy
+	nodeset.Spec.PersistentVolumeClaimRetentionPolicy = retainPolicy
 	got := getPersistentVolumeClaimRetentionPolicy(&nodeset)
 	if got.WhenScaled != slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType || got.WhenDeleted != slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType {
 		t.Errorf("Expected retain policy")
 	}
-	nodeset.Spec.PersistentVolumeClaimRetentionPolicy = &scaledownPolicy
+	nodeset.Spec.PersistentVolumeClaimRetentionPolicy = scaledownPolicy
 	got = getPersistentVolumeClaimRetentionPolicy(&nodeset)
 	if got.WhenScaled != slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType || got.WhenDeleted != slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType {
 		t.Errorf("Expected scaledown policy")

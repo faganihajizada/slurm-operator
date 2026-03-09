@@ -91,7 +91,7 @@ func (r *ControllerWebhook) ValidateUpdate(ctx context.Context, oldController, n
 
 	// We use volumeClaimTemplates to handle the controller savestate PVC.
 	// StatefulSet does not allow update of that field.
-	if newController.Spec.Persistence.Enabled != oldController.Spec.Persistence.Enabled {
+	if !apiequality.Semantic.DeepEqual(newController.Spec.Persistence.Enabled, oldController.Spec.Persistence.Enabled) {
 		errs = append(errs, errors.New("cannot change persistence.enabled after deployment"))
 	}
 

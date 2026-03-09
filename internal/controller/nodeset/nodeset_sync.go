@@ -36,6 +36,7 @@ import (
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/builder/labels"
 	nodesetutils "github.com/SlinkyProject/slurm-operator/internal/controller/nodeset/utils"
+	"github.com/SlinkyProject/slurm-operator/internal/defaults"
 	"github.com/SlinkyProject/slurm-operator/internal/utils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/historycontrol"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/mathutils"
@@ -71,6 +72,7 @@ func (r *NodeSetReconciler) Sync(ctx context.Context, req reconcile.Request) err
 
 	// Make a copy now to avoid client cache mutation.
 	nodeset = nodeset.DeepCopy()
+	defaults.SetNodeSetDefaults(nodeset)
 	key := objectutils.KeyFunc(nodeset)
 
 	if nodeset.DeletionTimestamp.IsZero() {
@@ -826,7 +828,7 @@ func (r *NodeSetReconciler) syncNodeSet(
 
 		// Handle replica scaling by comparing the known pods to the target number of replicas.
 		// Create or delete pods as needed to reach the target number.
-		replicaCount := int(ptr.Deref(nodeset.Spec.Replicas, 0))
+		replicaCount := int(ptr.Deref(nodeset.Spec.Replicas, defaults.DefaultNodeSetReplicas))
 		diff := len(podsNewScaling) - replicaCount
 		if diff < 0 {
 			diff = -diff
@@ -1339,12 +1341,12 @@ func (r *NodeSetReconciler) syncUpdate(
 	hash string,
 ) error {
 	switch nodeset.Spec.UpdateStrategy.Type {
-	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
-		// r.syncNodeSet() will handled it on the next reconcile
-		return nil
+	default:
+		fallthrough
 	case slinkyv1beta1.RollingUpdateNodeSetStrategyType:
 		return r.syncRollingUpdate(ctx, nodeset, pods, hash)
-	default:
+	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
+		// r.syncNodeSet() will handled it on the next reconcile
 		return nil
 	}
 }
@@ -1391,8 +1393,8 @@ func (r *NodeSetReconciler) splitUpdatePods(
 	logger := log.FromContext(ctx)
 
 	switch nodeset.Spec.UpdateStrategy.Type {
-	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
-		return nil, nil
+	default:
+		fallthrough
 	case slinkyv1beta1.RollingUpdateNodeSetStrategyType:
 		newPods, oldPods := findUpdatedPods(pods, hash)
 
@@ -1404,7 +1406,7 @@ func (r *NodeSetReconciler) splitUpdatePods(
 			}
 		}
 
-		total := int(ptr.Deref(nodeset.Spec.Replicas, 0))
+		total := int(ptr.Deref(nodeset.Spec.Replicas, defaults.DefaultNodeSetReplicas))
 		if nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeDaemonset {
 			total = len(pods)
 		}
@@ -1421,7 +1423,7 @@ func (r *NodeSetReconciler) splitUpdatePods(
 			"updatePods", len(podsToDelete),
 			"remainingPods", len(remainingPods))
 		return podsToDelete, remainingPods
-	default:
+	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
 		return nil, nil
 	}
 }

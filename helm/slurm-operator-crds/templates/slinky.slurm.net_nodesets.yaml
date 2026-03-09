@@ -133,7 +133,7 @@ spec:
                       Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION
                     type: string
                   enabled:
-                    default: true
+                    default: false
                     description: Enabled will create a partition for this NodeSet.
                     type: boolean
                 required:
@@ -146,22 +146,31 @@ spec:
                   NodeSetAutoDeletePVC feature gate to be enabled, which is alpha.
                 properties:
                   whenDeleted:
+                    default: Retain
                     description: |-
                       WhenDeleted specifies what happens to PVCs created from NodeSet
                       VolumeClaimTemplates when the NodeSet is deleted. The default policy
                       of `Retain` causes PVCs to not be affected by NodeSet deletion. The
                       `Delete` policy causes those PVCs to be deleted.
+                    enum:
+                    - Retain
+                    - Delete
                     type: string
                   whenScaled:
+                    default: Retain
                     description: |-
                       WhenScaled specifies what happens to PVCs created from NodeSet
                       VolumeClaimTemplates when the NodeSet is scaled down. The default
                       policy of `Retain` causes PVCs to not be affected by a scaledown. The
                       `Delete` policy causes the associated PVCs for any excess pods to be
                       deleted.
+                    enum:
+                    - Retain
+                    - Delete
                     type: string
                 type: object
               replicas:
+                default: 1
                 description: |-
                   replicas is the desired number of replicas of the given Template.
                   These are replicas in the sense that they are instantiations of the
@@ -171,6 +180,7 @@ spec:
                 format: int32
                 type: integer
               revisionHistoryLimit:
+                default: 0
                 description: |-
                   revisionHistoryLimit is the maximum number of revisions that will
                   be maintained in the NodeSet's revision history. The revision history
@@ -294,17 +304,23 @@ spec:
                         anyOf:
                         - type: integer
                         - type: string
+                        default: 25%
                         description: |-
                           The maximum number of pods that can be unavailable during the update.
                           Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
                           Absolute number is calculated from percentage by rounding up. This can not be 0.
-                          Defaults to 1.
+                          Defaults to 25%.
                         x-kubernetes-int-or-string: true
                     type: object
                   type:
+                    default: RollingUpdate
                     description: |-
                       Type indicates the type of the NodeSetUpdateStrategy.
+                      One of: RollingUpdate; OnDelete.
                       Default is RollingUpdate.
+                    enum:
+                    - RollingUpdate
+                    - OnDelete
                     type: string
                 type: object
               volumeClaimTemplates:

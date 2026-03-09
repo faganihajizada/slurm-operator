@@ -41,6 +41,7 @@ type NodeSetSpec struct {
 	// If unspecified, defaults to 1.
 	// When ScalingMode is daemonset, this field is ignored.
 	// +optional
+	// +default:=1
 	Replicas *int32 `json:"replicas,omitempty"`
 
 	// ScalingMode controls how the NodeSet scales pods.
@@ -101,13 +102,14 @@ type NodeSetSpec struct {
 	// consists of all revisions not represented by a currently applied
 	// NodeSetSpec version. The default value is 0.
 	// +optional
-	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
+	// +default:=0
+	RevisionHistoryLimit int32 `json:"revisionHistoryLimit,omitempty"`
 
 	// PersistentVolumeClaimRetentionPolicy describes the policy used for PVCs
 	// created from the NodeSet VolumeClaimTemplates. This requires the
 	// NodeSetAutoDeletePVC feature gate to be enabled, which is alpha.
 	// +optional
-	PersistentVolumeClaimRetentionPolicy *NodeSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
+	PersistentVolumeClaimRetentionPolicy NodeSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 
 	// minReadySeconds is the minimum number of seconds for which a newly
 	// created NodeSet Pod should be ready without any of its container crashing,
@@ -133,13 +135,13 @@ type NodeSetSpec struct {
 	// See https://kubernetes.io/docs/tasks/run-application/configure-pdb/ for more information.
 	// +optional
 	// +default:=true
-	WorkloadDisruptionProtection bool `json:"workloadDisruptionProtection,omitempty"`
+	WorkloadDisruptionProtection *bool `json:"workloadDisruptionProtection,omitempty"`
 }
 
 // NodeSetPartition defines the Slurm partition configuration for the NodeSet.
 type NodeSetPartition struct {
 	// Enabled will create a partition for this NodeSet.
-	// +default:=true
+	// +default:=false
 	Enabled bool `json:"enabled"`
 
 	// Config is added to the NodeSet's partition line.
@@ -169,14 +171,17 @@ type NodeSetSsh struct {
 // parameters necessary to perform the update for the indicated strategy.
 type NodeSetUpdateStrategy struct {
 	// Type indicates the type of the NodeSetUpdateStrategy.
+	// One of: RollingUpdate; OnDelete.
 	// Default is RollingUpdate.
 	// +optional
+	// +kubebuilder:validation:Enum=RollingUpdate;OnDelete
+	// +kubebuilder:default:=RollingUpdate
 	Type NodeSetUpdateStrategyType `json:"type,omitempty"`
 
 	// RollingUpdate is used to communicate parameters when Type is
 	// RollingUpdateNodeSetStrategyType.
 	// +optional
-	RollingUpdate *RollingUpdateNodeSetStrategy `json:"rollingUpdate,omitempty"`
+	RollingUpdate RollingUpdateNodeSetStrategy `json:"rollingUpdate,omitempty"`
 }
 
 // PersistentVolumeClaimRetentionPolicyType is a string enumeration of the policies that will determine
@@ -205,6 +210,8 @@ type NodeSetPersistentVolumeClaimRetentionPolicy struct {
 	// VolumeClaimTemplates when the NodeSet is deleted. The default policy
 	// of `Retain` causes PVCs to not be affected by NodeSet deletion. The
 	// `Delete` policy causes those PVCs to be deleted.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	// +kubebuilder:default:=Retain
 	WhenDeleted PersistentVolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
 
 	// WhenScaled specifies what happens to PVCs created from NodeSet
@@ -212,6 +219,8 @@ type NodeSetPersistentVolumeClaimRetentionPolicy struct {
 	// policy of `Retain` causes PVCs to not be affected by a scaledown. The
 	// `Delete` policy causes the associated PVCs for any excess pods to be
 	// deleted.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	// +kubebuilder:default:=Retain
 	WhenScaled PersistentVolumeClaimRetentionPolicyType `json:"whenScaled,omitempty"`
 }
 
@@ -237,8 +246,9 @@ type RollingUpdateNodeSetStrategy struct {
 	// The maximum number of pods that can be unavailable during the update.
 	// Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
 	// Absolute number is calculated from percentage by rounding up. This can not be 0.
-	// Defaults to 1.
+	// Defaults to 25%.
 	// +optional
+	// +kubebuilder:default:="25%"
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 

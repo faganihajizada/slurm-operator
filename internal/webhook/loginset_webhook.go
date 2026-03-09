@@ -6,7 +6,6 @@ package webhook
 import (
 	"context"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -40,18 +39,14 @@ var _ admission.Validator[*slinkyv1beta1.LoginSet] = &LoginSetWebhook{}
 func (r *LoginSetWebhook) ValidateCreate(ctx context.Context, loginset *slinkyv1beta1.LoginSet) (admission.Warnings, error) {
 	loginsetlog.Info("validate create", "loginset", klog.KObj(loginset))
 
-	warns, errs := validateLoginSet(loginset)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *LoginSetWebhook) ValidateUpdate(ctx context.Context, oldLoginset, newLoginset *slinkyv1beta1.LoginSet) (admission.Warnings, error) {
 	loginsetlog.Info("validate update", "newLoginset", klog.KObj(newLoginset))
 
-	warns, errs := validateLoginSet(newLoginset)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -59,11 +54,4 @@ func (r *LoginSetWebhook) ValidateDelete(ctx context.Context, loginset *slinkyv1
 	loginsetlog.Info("validate delete", "loginset", klog.KObj(loginset))
 
 	return nil, nil
-}
-
-func validateLoginSet(obj *slinkyv1beta1.LoginSet) (admission.Warnings, []error) {
-	var warns admission.Warnings
-	var errs []error
-
-	return warns, errs
 }

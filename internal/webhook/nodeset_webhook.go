@@ -5,9 +5,7 @@ package webhook
 
 import (
 	"context"
-	"fmt"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -38,18 +36,14 @@ var _ admission.Validator[*slinkyv1beta1.NodeSet] = &NodeSetWebhook{}
 func (r *NodeSetWebhook) ValidateCreate(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) (admission.Warnings, error) {
 	nodesetlog.Info("validate create", "nodeset", klog.KObj(nodeset))
 
-	warns, errs := validateNodeSet(nodeset)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *NodeSetWebhook) ValidateUpdate(ctx context.Context, oldNodeSet, newNodeSet *slinkyv1beta1.NodeSet) (admission.Warnings, error) {
 	nodesetlog.Info("validate update", "newNodeSet", klog.KObj(newNodeSet))
 
-	warns, errs := validateNodeSet(newNodeSet)
-
-	return warns, utilerrors.NewAggregate(errs)
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -57,44 +51,4 @@ func (r *NodeSetWebhook) ValidateDelete(ctx context.Context, nodeset *slinkyv1be
 	nodesetlog.Info("validate delete", "nodeset", klog.KObj(nodeset))
 
 	return nil, nil
-}
-
-func validateNodeSet(nodeset *slinkyv1beta1.NodeSet) (admission.Warnings, []error) {
-	var warns admission.Warnings
-	var errs []error
-
-	switch nodeset.Spec.UpdateStrategy.Type {
-	case "":
-		// valid but will default
-	case slinkyv1beta1.RollingUpdateNodeSetStrategyType:
-		// valid
-	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
-		// valid
-	default:
-		errs = append(errs, fmt.Errorf("`NodeSet.Spec.UpdateStrategy.Type` is not valid. Got: %v. Expected of: %s; %s",
-			nodeset.Spec.UpdateStrategy.Type, slinkyv1beta1.RollingUpdateNodeSetStrategyType, slinkyv1beta1.OnDeleteNodeSetStrategyType))
-	}
-
-	if nodeset.Spec.PersistentVolumeClaimRetentionPolicy != nil {
-		switch nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted {
-		case slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType:
-			// valid
-		case slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType:
-			// valid
-		default:
-			errs = append(errs, fmt.Errorf("`NodeSet.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted` is not valid. Got: %v. Expected of: %s; %s",
-				nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted, slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType, slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType))
-		}
-		switch nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled {
-		case slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType:
-			// valid
-		case slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType:
-			// valid
-		default:
-			errs = append(errs, fmt.Errorf("`NodeSet.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled` is not valid. Got: %v. Expected of: %s; %s",
-				nodeset.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled, slinkyv1beta1.RetainPersistentVolumeClaimRetentionPolicyType, slinkyv1beta1.DeletePersistentVolumeClaimRetentionPolicyType))
-		}
-	}
-
-	return warns, errs
 }

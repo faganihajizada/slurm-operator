@@ -28,9 +28,11 @@ import (
 	"github.com/SlinkyProject/slurm-operator/internal/builder/labels"
 	"github.com/SlinkyProject/slurm-operator/internal/controller/nodeset/slurmcontrol"
 	nodesetutils "github.com/SlinkyProject/slurm-operator/internal/controller/nodeset/utils"
+	"github.com/SlinkyProject/slurm-operator/internal/defaults"
 	"github.com/SlinkyProject/slurm-operator/internal/utils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/historycontrol"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/mathutils"
+	"github.com/SlinkyProject/slurm-operator/internal/utils/objectutils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/podutils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/structutils"
 	slurmconditions "github.com/SlinkyProject/slurm-operator/pkg/conditions"
@@ -136,7 +138,7 @@ func (r *NodeSetReconciler) syncNodeSetStatus(
 		return err
 	}
 
-	key := klog.KObj(nodeset).String()
+	key := objectutils.KeyFunc(nodeset)
 	if nodeset.Spec.MinReadySeconds >= 0 && (newStatus.ReadyReplicas != newStatus.AvailableReplicas) {
 		// Resync the NodeSet after MinReadySeconds as a last line of defense to guard against clock-skew.
 		durationStore.Push(key, (time.Duration(nodeset.Spec.MinReadySeconds)*time.Second)+time.Second)
@@ -195,7 +197,7 @@ func (r *NodeSetReconciler) calculateReplicaStatus(
 	}
 	if nodeset != nil && nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeStatefulset {
 		status.Unavailable = mathutils.Clamp(status.Replicas-status.Available, 0, status.Replicas)
-		status.Desired = ptr.Deref(nodeset.Spec.Replicas, 0)
+		status.Desired = ptr.Deref(nodeset.Spec.Replicas, defaults.DefaultNodeSetReplicas)
 	} else if nodeset != nil && nodeset.Spec.ScalingMode == slinkyv1beta1.ScalingModeDaemonset {
 		desiredNodes, err := r.getDesiredNodeCountForDaemonSet(ctx, nodeset)
 		if err != nil {
@@ -332,7 +334,7 @@ func (r *NodeSetReconciler) updateNodeSetPodPDBLabels(
 		logger.V(1).Info("Pending Pod Label update", "pod", klog.KObj(pod), "podProtect", podProtect)
 		toUpdate := pod.DeepCopy()
 
-		if podProtect && nodeset.Spec.WorkloadDisruptionProtection {
+		if podProtect && ptr.Deref(nodeset.Spec.WorkloadDisruptionProtection, defaults.DefaultNodeSetWorkloadDisruptionProtection) {
 			podLabel := labels.NewBuilder().WithPodProtect().Build()
 			toUpdate.Labels = structutils.MergeMaps(toUpdate.Labels, podLabel)
 		} else {

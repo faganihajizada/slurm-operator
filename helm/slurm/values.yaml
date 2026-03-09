@@ -711,7 +711,7 @@ nodesets:
     # Partition configuration for this NodeSet.
     partition:
       # -- Enable NodeSet partition creation.
-      enabled: true
+      enabled: false
       # -- (string) Raw Slurm partition configuration options added to the partition line added to the partition line.
       # Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION
       config: null

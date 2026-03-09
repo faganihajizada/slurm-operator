@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
+	"github.com/SlinkyProject/slurm-operator/internal/defaults"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -96,13 +97,14 @@ func TestBuilder_BuildTokenSecret(t *testing.T) {
 				t.Errorf("Builder.BuildTokenSecret() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			refresh := ptr.Deref(tt.args.token.Spec.Refresh, defaults.DefaultTokenRefresh)
 			switch {
 			case err != nil:
 				return
 
-			case ptr.Deref(got.Immutable, false) != !tt.args.token.Spec.Refresh:
+			case ptr.Deref(got.Immutable, false) != !refresh:
 				t.Errorf("Immutable = %v , want = %v",
-					ptr.Deref(got.Immutable, false), !tt.args.token.Spec.Refresh)
+					ptr.Deref(got.Immutable, false), !refresh)
 			}
 		})
 	}
