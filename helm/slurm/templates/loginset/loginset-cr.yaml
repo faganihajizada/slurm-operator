@@ -38,6 +38,10 @@ spec:
     {{- . | nindent 4 }}
   {{- end }}{{- /* with $loginset.rootSshAuthorizedKeys */}}
   replicas: {{ $loginset.replicas }}
+  {{- with $loginset.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}{{- /* with $loginset.strategy */}}
   login:
     {{- $_ := set $loginset.login "imagePullPolicy" (get $loginset.login "imagePullPolicy" | default $.Values.imagePullPolicy ) -}}
     {{- include "format-container" $loginset.login | nindent 4 }}
