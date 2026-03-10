@@ -35,6 +35,12 @@ const (
 	BackoffGCInterval = 1 * time.Minute
 )
 
+// Reasons for LoginSet events
+const (
+	SyncFailedReason          = "SyncFailed"
+	ControllerRefFailedReason = "ControllerRefFailed"
+)
+
 func init() {
 	flag.IntVar(&maxConcurrentReconciles, "loginset-workers", maxConcurrentReconciles, "Max concurrent workers for LoginSet controller.")
 }

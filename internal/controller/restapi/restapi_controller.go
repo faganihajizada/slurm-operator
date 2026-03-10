@@ -35,6 +35,11 @@ const (
 	BackoffGCInterval = 1 * time.Minute
 )
 
+// Reasons for RestAPI events
+const (
+	SyncFailedReason = "SyncFailed"
+)
+
 func init() {
 	flag.IntVar(&maxConcurrentReconciles, "restapi-workers", maxConcurrentReconciles, "Max concurrent workers for Restapi controller.")
 }

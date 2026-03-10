@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
@@ -91,6 +92,8 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 
 	for _, s := range syncSteps {
 		if err := s.Sync(ctx, accounting); err != nil {
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(accounting, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
 			e := fmt.Errorf("[%s]: %w", s.Name, err)
 			errors := []error{e}
 			if err := r.syncStatus(ctx, accounting); err != nil {

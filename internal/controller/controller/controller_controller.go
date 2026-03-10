@@ -36,6 +36,11 @@ const (
 	BackoffGCInterval = 1 * time.Minute
 )
 
+// Reasons for Controller events
+const (
+	SyncFailedReason = "SyncFailed"
+)
+
 func init() {
 	flag.IntVar(&maxConcurrentReconciles, "controller-workers", maxConcurrentReconciles, "Max concurrent workers for Controller controller.")
 }
