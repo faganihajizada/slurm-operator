@@ -118,13 +118,13 @@ func (r *ControllerReconciler) Sync(ctx context.Context, req reconcile.Request) 
 		if err := s.Sync(ctx, controller); err != nil {
 			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
 			r.eventRecorder.Eventf(controller, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
-			e := fmt.Errorf("[%s]: %w", s.Name, err)
-			errors := []error{e}
+			e := fmt.Errorf("failed %q step: %w", s.Name, err)
+			errs := []error{e}
 			if err := r.syncStatus(ctx, controller); err != nil {
-				e := fmt.Errorf("[%s]: %w", s.Name, err)
-				errors = append(errors, e)
+				e := fmt.Errorf("failed status sync: %w", err)
+				errs = append(errs, e)
 			}
-			return utilerrors.NewAggregate(errors)
+			return utilerrors.NewAggregate(errs)
 		}
 	}
 

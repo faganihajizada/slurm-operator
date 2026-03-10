@@ -122,13 +122,13 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 		if err := s.Sync(ctx, token); err != nil {
 			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
 			r.eventRecorder.Eventf(token, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
-			e := fmt.Errorf("[%s]: %w", s.Name, err)
-			errors := []error{e}
+			e := fmt.Errorf("failed %q step: %w", s.Name, err)
+			errs := []error{e}
 			if err := r.syncStatus(ctx, token); err != nil {
-				e := fmt.Errorf("[%s]: %w", s.Name, err)
-				errors = append(errors, e)
+				e := fmt.Errorf("failed status sync: %w", err)
+				errs = append(errs, e)
 			}
-			return utilerrors.NewAggregate(errors)
+			return utilerrors.NewAggregate(errs)
 		}
 	}
 

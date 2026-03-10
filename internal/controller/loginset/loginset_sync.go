@@ -107,13 +107,13 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 		if err := s.Sync(ctx, loginset); err != nil {
 			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
 			r.eventRecorder.Eventf(loginset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
-			e := fmt.Errorf("[%s]: %w", s.Name, err)
-			errors := []error{e}
+			e := fmt.Errorf("failed %q step: %w", s.Name, err)
+			errs := []error{e}
 			if err := r.syncStatus(ctx, loginset); err != nil {
-				e := fmt.Errorf("[%s]: %w", s.Name, err)
-				errors = append(errors, e)
+				e := fmt.Errorf("failed status sync: %w", err)
+				errs = append(errs, e)
 			}
-			return utilerrors.NewAggregate(errors)
+			return utilerrors.NewAggregate(errs)
 		}
 	}
 
