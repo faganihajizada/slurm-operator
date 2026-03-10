@@ -74,15 +74,12 @@ func (r *realPodControl) CreateNodeSetPod(ctx context.Context, nodeset *slinkyv1
 		r.recordPodEvent(eventUpdate, nodeset, pod, err)
 		return err
 	}
-	r.recordPodEvent(eventCreate, nodeset, pod, err)
 	return err
 }
 
 // DeleteNodeSetPod implements PodControlInterface.
 func (r *realPodControl) DeleteNodeSetPod(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pod *corev1.Pod) error {
-	err := r.podControl.DeletePod(ctx, pod.GetNamespace(), pod.GetName(), nodeset)
-	r.recordPodEvent(eventDelete, nodeset, pod, err)
-	return err
+	return r.podControl.DeletePod(ctx, pod.Namespace, pod.Name, nodeset)
 }
 
 // UpdatePod implements PodControlInterface.
@@ -272,14 +269,14 @@ func (r *realPodControl) recordPodEvent(verb string, nodeset *slinkyv1beta1.Node
 	caser := cases.Title(language.English)
 	verbStr := caser.String(verb)
 	if err == nil {
-		reason := fmt.Sprintf("Successful%s", verbStr)
-		message := fmt.Sprintf("%s Pod %s in NodeSet %s successful",
-			strings.ToLower(verb), pod.Name, nodeset.GetName())
+		reason := fmt.Sprintf("Successful%s", caser.String(verb))
+		message := fmt.Sprintf("%s Pod %s successful",
+			strings.ToLower(verb), pod.Name)
 		r.recorder.Eventf(nodeset, pod, corev1.EventTypeNormal, reason, verbStr, message)
 	} else {
-		reason := fmt.Sprintf("Failed%s", verbStr)
-		message := fmt.Sprintf("%s Pod %s in NodeSet %s failed error: %s",
-			strings.ToLower(verb), pod.Name, nodeset.GetName(), err)
+		reason := fmt.Sprintf("Failed%s", caser.String(verb))
+		message := fmt.Sprintf("%s Pod %s failed error: %s",
+			strings.ToLower(verb), pod.Name, err)
 		r.recorder.Eventf(nodeset, pod, corev1.EventTypeWarning, reason, verbStr, message)
 	}
 }
@@ -326,14 +323,14 @@ func (r *realPodControl) recordClaimEvent(verb string, nodeset *slinkyv1beta1.No
 	verbStr := caser.String(verb)
 	if err == nil {
 		reason := fmt.Sprintf("Successful%s", caser.String(verb))
-		message := fmt.Sprintf("%s Claim %s Pod %s in NodeSet %s successful",
-			strings.ToLower(verb), claim.Name, pod.Name, nodeset.Name)
-		r.recorder.Eventf(nodeset, nil, corev1.EventTypeNormal, reason, verbStr, message)
+		message := fmt.Sprintf("%s Claim: %s Pod %s",
+			strings.ToLower(verb), claim.Name, pod.Name)
+		r.recorder.Eventf(nodeset, claim, corev1.EventTypeNormal, reason, verbStr, message)
 	} else {
 		reason := fmt.Sprintf("Failed%s", caser.String(verb))
-		message := fmt.Sprintf("%s Claim %s for Pod %s in NodeSet %s failed error: %s",
-			strings.ToLower(verb), claim.Name, pod.Name, nodeset.Name, err)
-		r.recorder.Eventf(nodeset, nil, corev1.EventTypeWarning, reason, verbStr, message)
+		message := fmt.Sprintf("%s Claim: %s for Pod %s failed: %s",
+			strings.ToLower(verb), claim.Name, pod.Name, err)
+		r.recorder.Eventf(nodeset, claim, corev1.EventTypeWarning, reason, verbStr, message)
 	}
 }
 
