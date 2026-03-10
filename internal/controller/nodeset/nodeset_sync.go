@@ -230,6 +230,11 @@ func (r *NodeSetReconciler) canAdoptFunc(nodeset *slinkyv1beta1.NodeSet) func(ct
 	})
 }
 
+type SyncStep struct {
+	Name string
+	Sync func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, hash string) error
+}
+
 // sync is the main reconciliation logic.
 func (r *NodeSetReconciler) sync(
 	ctx context.Context,
@@ -237,54 +242,75 @@ func (r *NodeSetReconciler) sync(
 	pods []*corev1.Pod,
 	hash string,
 ) error {
-	if err := r.slurmControl.RefreshNodeCache(ctx, nodeset); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "Failed to refresh Slurm node cache: %v", err)
-		return err
+	syncSteps := []SyncStep{
+		{
+			Name: "RefreshNodeCache",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.slurmControl.RefreshNodeCache(ctx, nodeset)
+			},
+		},
+		{
+			Name: "ClusterWorkerService",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncClusterWorkerService(ctx, nodeset)
+			},
+		},
+		{
+			Name: "ClusterWorkerPDB",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncClusterWorkerPDB(ctx, nodeset)
+			},
+		},
+		{
+			Name: "SSHConfig",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncSshConfig(ctx, nodeset)
+			},
+		},
+		{
+			Name: "SlurmNodes",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncSlurmNodes(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "SlurmDeadline",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncSlurmDeadline(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "SlurmTopology",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncSlurmTopology(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "Cordon",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncCordon(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "NodeTaint",
+			Sync: func(ctx context.Context, _ *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncNodeTaint(ctx)
+			},
+		},
+		{
+			Name: "NodeSetPods",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, hash string) error {
+				return r.syncNodeSet(ctx, nodeset, pods, hash)
+			},
+		},
 	}
 
-	if err := r.syncClusterWorkerService(ctx, nodeset); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync cluster worker service: %v", err)
-		return err
-	}
-
-	if err := r.syncClusterWorkerPDB(ctx, nodeset); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync PodDisruptionBudget: %v", err)
-		return err
-	}
-
-	if err := r.syncSshConfig(ctx, nodeset); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync SSH config: %v", err)
-		return err
-	}
-
-	if err := r.syncSlurmNodes(ctx, nodeset, pods); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync Slurm nodes: %v", err)
-		return err
-	}
-
-	if err := r.syncSlurmDeadline(ctx, nodeset, pods); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync Slurm deadline: %v", err)
-		return err
-	}
-
-	if err := r.syncSlurmTopology(ctx, nodeset, pods); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync Slurm topology: %v", err)
-		return err
-	}
-
-	if err := r.syncCordon(ctx, nodeset, pods); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync cordon state: %v", err)
-		return err
-	}
-
-	if err := r.syncNodeTaint(ctx); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync node taints: %v", err)
-		return err
-	}
-
-	if err := r.syncNodeSet(ctx, nodeset, pods, hash); err != nil {
-		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync NodeSet pods: %v", err)
-		return err
+	for _, s := range syncSteps {
+		if err := s.Sync(ctx, nodeset, pods, hash); err != nil {
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
+			return err
+		}
 	}
 
 	return nil
