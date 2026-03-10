@@ -147,12 +147,7 @@ func (r *NodeSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (re
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.eventRecorder = mgr.GetEventRecorder(ControllerName)
-	r.builder = builder.New(r.Client)
-	r.refResolver = refresolver.New(r.Client)
-	r.historyControl = historycontrol.NewHistoryControl(r.Client)
 	r.podControl = podcontrol.NewPodControl(r.Client, r.eventRecorder)
-	r.slurmControl = slurmcontrol.NewSlurmControl(r.ClientMap)
-	r.expectations = kubecontroller.NewUIDTrackingControllerExpectations(kubecontroller.NewControllerExpectations())
 	podEventHandler := eventhandler.NewPodEventHandler(r.Client, r.expectations)
 	if err := indexes.SetupWithManager(mgr); err != nil {
 		return err
