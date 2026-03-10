@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -21,7 +22,13 @@ import (
 	"github.com/SlinkyProject/slurm-operator/internal/utils/structutils"
 )
 
-func SyncObject(c client.Client, ctx context.Context, newObj client.Object, shouldUpdate bool) error {
+const (
+	ReasonCreateSucceeded = "CreateSucceeded"
+	ReasonCreateFailed    = "CreateFailed"
+	ReasonPatchFailed     = "PatchFailed"
+)
+
+func SyncObject(c client.Client, ctx context.Context, eventRecorder events.EventRecorder, eventObj client.Object, newObj client.Object, shouldUpdate bool) error {
 	logger := log.FromContext(ctx)
 
 	var oldObj client.Object
@@ -60,7 +67,13 @@ func SyncObject(c client.Client, ctx context.Context, newObj client.Object, shou
 			return fmt.Errorf("error getting %s: %w", key, err)
 		}
 		if err := c.Create(ctx, newObj); err != nil {
+			if eventRecorder != nil {
+				eventRecorder.Eventf(eventObj, oldObj, corev1.EventTypeWarning, ReasonCreateFailed, "Create", "Error creating %T: %s: %v", newObj, key, err)
+			}
 			return fmt.Errorf("error creating %s: %w", key, err)
+		}
+		if eventRecorder != nil {
+			eventRecorder.Eventf(eventObj, oldObj, corev1.EventTypeNormal, ReasonCreateSucceeded, "Create", "Created %T: %s", newObj, key)
 		}
 		return nil
 	}
@@ -198,6 +211,9 @@ func SyncObject(c client.Client, ctx context.Context, newObj client.Object, shou
 	}
 
 	if err := c.Patch(ctx, oldObj, patch); err != nil {
+		if eventRecorder != nil {
+			eventRecorder.Eventf(eventObj, newObj, corev1.EventTypeWarning, ReasonPatchFailed, "Patch", "Error patching %T: %s: %v", newObj, key, err)
+		}
 		return fmt.Errorf("error patching %s: %w", key, err)
 	}
 

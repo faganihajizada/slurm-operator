@@ -50,7 +50,7 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, accounting, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -66,7 +66,7 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, accounting, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -82,7 +82,7 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, accounting, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil

@@ -309,7 +309,7 @@ func (r *NodeSetReconciler) syncClusterWorkerService(ctx context.Context, nodese
 		return err
 	}
 
-	if err := objectutils.SyncObject(r.Client, ctx, service, true); err != nil {
+	if err := objectutils.SyncObject(r.Client, ctx, nil, nil, service, true); err != nil {
 		return fmt.Errorf("failed to sync service (%s): %w", klog.KObj(service), err)
 	}
 
@@ -1502,7 +1502,7 @@ func (r *NodeSetReconciler) syncClusterWorkerPDB(
 	}
 
 	// Sync the PodDisruptionBudget for each cluster
-	if err := objectutils.SyncObject(r.Client, ctx, podDisruptionBudget, true); err != nil {
+	if err := objectutils.SyncObject(r.Client, ctx, nil, nil, podDisruptionBudget, true); err != nil {
 		return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(podDisruptionBudget), err)
 	}
 
@@ -1524,7 +1524,7 @@ func (r *NodeSetReconciler) syncSshConfig(
 		return fmt.Errorf("failed to build SSH config: %w", err)
 	}
 
-	if err := objectutils.SyncObject(r.Client, ctx, config, true); err != nil {
+	if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, nodeset, config, true); err != nil {
 		return fmt.Errorf("failed to sync SSH config (%s): %w", klog.KObj(config), err)
 	}
 

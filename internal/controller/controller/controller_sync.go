@@ -50,7 +50,7 @@ func (r *ControllerReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, false); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, controller, object, false); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -69,7 +69,7 @@ func (r *ControllerReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, controller, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -85,7 +85,7 @@ func (r *ControllerReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, controller, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -100,13 +100,13 @@ func (r *ControllerReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				}
 
 				if !controller.Spec.Metrics.Enabled || !controller.Spec.Metrics.ServiceMonitor.Enabled {
-					if err := objectutils.DeleteObject(r.Client, ctx, object); err != nil {
+					if err := objectutils.DeleteObject(r.Client, ctx, r.eventRecorder, controller, object); err != nil {
 						return fmt.Errorf("failed to delete object (%s): %w", klog.KObj(object), err)
 					}
 					return nil
 				}
 
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, controller, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil

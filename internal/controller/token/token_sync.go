@@ -70,7 +70,7 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, false); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, token, object, false); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -109,7 +109,7 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, token, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 
