@@ -300,7 +300,7 @@ func (r *NodeSetReconciler) sync(
 		{
 			Name: "NodeSetPods",
 			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, hash string) error {
-				return r.syncNodeSet(ctx, nodeset, pods, hash)
+				return r.syncNodeSetPods(ctx, nodeset, pods, hash)
 			},
 		},
 	}
@@ -812,12 +812,12 @@ func (r *NodeSetReconciler) podsShouldBeOnNode(
 	return nodesNeedingDaemonPods, podsToDelete
 }
 
-// syncNodeSet will reconcile NodeSet pod replica counts.
+// syncNodeSetPods will reconcile NodeSet pod replica counts.
 // Pods will be:
 //   - Scaled out when: `replicaCount < replicasWant“
 //   - Scaled in when: `replicaCount > replicasWant“
 //   - Processed when: `replicaCount == replicasWant“
-func (r *NodeSetReconciler) syncNodeSet(
+func (r *NodeSetReconciler) syncNodeSetPods(
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
 	pods []*corev1.Pod,

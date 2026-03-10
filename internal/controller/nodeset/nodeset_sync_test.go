@@ -495,7 +495,7 @@ func TestNodeSetReconciler_sync(t *testing.T) {
 	}
 }
 
-func TestNodeSetReconciler_syncNodeSet(t *testing.T) {
+func TestNodeSetReconciler_syncNodeSetPods(t *testing.T) {
 	type fields struct {
 		Client    client.Client
 		ClientMap *clientmap.ClientMap
@@ -517,8 +517,8 @@ func TestNodeSetReconciler_syncNodeSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.syncNodeSet(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.syncNodeSet() error = %v, wantErr %v", err, tt.wantErr)
+			if err := r.syncNodeSetPods(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.syncNodeSetPods() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
