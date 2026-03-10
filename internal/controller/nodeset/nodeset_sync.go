@@ -847,7 +847,7 @@ func (r *NodeSetReconciler) syncNodeSet(
 			return r.doPodScale(ctx, nodeset, podsNewScaling, podsToDelete, podsToCreate)
 		}
 	} else {
-		logger.V(2).Info("Processing NodeSet pods for replica scaling")
+		logger.V(2).Info("Processing NodeSet pods in StatefulSet mode")
 
 		// Handle replica scaling by comparing the known pods to the target number of replicas.
 		// Create or delete pods as needed to reach the target number.
