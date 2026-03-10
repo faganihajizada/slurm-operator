@@ -277,7 +277,7 @@ func (r *NodeSetReconciler) sync(
 		return err
 	}
 
-	if err := r.syncTaint(ctx); err != nil {
+	if err := r.syncNodeTaint(ctx); err != nil {
 		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", "failed to sync node taints: %v", err)
 		return err
 	}
@@ -409,8 +409,8 @@ func (r *NodeSetReconciler) syncCordon(
 	return nil
 }
 
-// syncTaint ensures that a NoExecute taint is applied to all nodes running NodeSets
-func (r *NodeSetReconciler) syncTaint(
+// syncNodeTaint ensures that a NoExecute taint is applied to all nodes running NodeSets
+func (r *NodeSetReconciler) syncNodeTaint(
 	ctx context.Context,
 ) error {
 	// Build a list of Kube nodes
