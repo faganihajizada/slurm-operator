@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 	kubecontroller "k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/history"
@@ -54,7 +54,7 @@ import (
 )
 
 func newNodeSetController(client client.Client, clientMap *clientmap.ClientMap) *NodeSetReconciler {
-	eventRecorder := record.NewFakeRecorder(10)
+	eventRecorder := events.NewFakeRecorder(10)
 	r := &NodeSetReconciler{
 		Client:         client,
 		Scheme:         client.Scheme(),

@@ -734,14 +734,14 @@ func (r *NodeSetReconciler) podsShouldBeOnNode(
 				msg := fmt.Sprintf("Found failed daemon pod %s/%s on node %s, will try to kill it", pod.Namespace, pod.Name, node.Name)
 				logger.V(2).Info("Found failed daemon pod on node, will try to kill it", "pod", klog.KObj(pod), "node", klog.KObj(node))
 				// Emit an event so that it's discoverable to users.
-				r.eventRecorder.Eventf(nodeset, corev1.EventTypeWarning, FailedDaemonPodReason, msg)
+				r.eventRecorder.Eventf(nodeset, pod, corev1.EventTypeWarning, FailedDaemonPodReason, "Info", msg)
 				podsToDelete = append(podsToDelete, pod)
 
 			case pod.Status.Phase == corev1.PodSucceeded:
 				msg := fmt.Sprintf("Found succeeded daemon pod %s/%s on node %s, will try to delete it", pod.Namespace, pod.Name, node.Name)
 				logger.V(2).Info("Found succeeded daemon pod on node, will try to delete it", "pod", klog.KObj(pod), "node", klog.KObj(node))
 				// Emit an event so that it's discoverable to users.
-				r.eventRecorder.Eventf(nodeset, corev1.EventTypeNormal, SucceededDaemonPodReason, msg)
+				r.eventRecorder.Eventf(nodeset, pod, corev1.EventTypeNormal, SucceededDaemonPodReason, "Info", msg)
 				podsToDelete = append(podsToDelete, pod)
 
 			default:

@@ -12,7 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/flowcontrol"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,7 +53,7 @@ type TokenReconciler struct {
 
 	builder       *builder.CommonBuilder
 	refResolver   *refresolver.RefResolver
-	eventRecorder record.EventRecorderLogger
+	eventRecorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=slinky.slurm.net,resources=tokens,verbs=get;list;watch;create;update;patch;delete
@@ -95,6 +95,7 @@ func (r *TokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *TokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.eventRecorder = mgr.GetEventRecorder(ControllerName)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&slinkyv1beta1.Token{}).
 		Owns(&corev1.Secret{}).
@@ -103,12 +104,11 @@ func (r *TokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func NewReconciler(c client.Client) *TokenReconciler {
 	s := c.Scheme()
-	es := corev1.EventSource{Component: ControllerName}
 	return &TokenReconciler{
 		Client:        c,
 		Scheme:        s,
 		builder:       builder.New(c),
 		refResolver:   refresolver.New(c),
-		eventRecorder: record.NewBroadcaster().NewRecorder(s, es),
+		eventRecorder: events.NewFakeRecorder(100),
 	}
 }

@@ -12,7 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/flowcontrol"
 	kubecontroller "k8s.io/kubernetes/pkg/controller"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -76,7 +76,7 @@ type NodeSetReconciler struct {
 	podControl     podcontrol.PodControlInterface
 	slurmControl   slurmcontrol.SlurmControlInterface
 	historyControl historycontrol.HistoryControlInterface
-	eventRecorder  record.EventRecorderLogger
+	eventRecorder  events.EventRecorder
 	expectations   *kubecontroller.UIDTrackingControllerExpectations
 }
 
@@ -92,6 +92,7 @@ type NodeSetReconciler struct {
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
 //+kubebuilder:rbac:groups=apps,resources=controllerrevisions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -131,7 +132,7 @@ func (r *NodeSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (re
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.eventRecorder = record.NewBroadcaster().NewRecorder(r.Scheme, corev1.EventSource{Component: ControllerName})
+	r.eventRecorder = mgr.GetEventRecorder(ControllerName)
 	r.builder = builder.New(r.Client)
 	r.refResolver = refresolver.New(r.Client)
 	r.historyControl = historycontrol.NewHistoryControl(r.Client)
@@ -159,8 +160,7 @@ func (r *NodeSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func NewReconciler(c client.Client, cm *clientmap.ClientMap) *NodeSetReconciler {
 	s := c.Scheme()
-	es := corev1.EventSource{Component: ControllerName}
-	er := record.NewBroadcaster().NewRecorder(s, es)
+	er := events.NewFakeRecorder(100)
 	if cm == nil {
 		panic("ClientMap cannot be nil")
 	}
