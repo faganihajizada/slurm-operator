@@ -36,9 +36,9 @@ annotation applied.
 apiVersion: v1
 kind: Node
 metadata:
+  name: node0
   annotations:
     topology.slinky.slurm.net/spec: topo-switch:s0,topo-block:b0
-  name: node0
 ```
 
 ## Slurm
@@ -87,30 +87,30 @@ And your Kubernetes nodes were annotated as such to match the `topology.yaml`.
 apiVersion: v1
 kind: Node
 metadata:
-  annotations:
-    topology.slinky.slurm.net/spec: topo-switch:s1,topo-block:b1
   name: node1
----
-apiVersion: v1
-kind: Node
-metadata:
   annotations:
     topology.slinky.slurm.net/spec: topo-switch:s1,topo-block:b1
+---
+apiVersion: v1
+kind: Node
+metadata:
   name: node2
+  annotations:
+    topology.slinky.slurm.net/spec: topo-switch:s1,topo-block:b1
 ---
 apiVersion: v1
 kind: Node
 metadata:
-  annotations:
-    topology.slinky.slurm.net/spec: topo-switch:s2,topo-block:b2
   name: node3
+  annotations:
+    topology.slinky.slurm.net/spec: topo-switch:s2,topo-block:b2
 ---
 apiVersion: v1
 kind: Node
 metadata:
+  name: node4
   annotations:
     topology.slinky.slurm.net/spec: topo-switch:s2,topo-block:b2
-  name: node4
 ```
 
 Then when the `slinky-0` NodeSet pod is scheduled onto Kubernetes node `node3`,
