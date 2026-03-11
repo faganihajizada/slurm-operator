@@ -36,9 +36,9 @@ const (
 	// a NodeSet pod is scheduled is cordoned
 	AnnotationNodeCordonReason = NodeSetPrefix + "node-cordon-reason"
 
-	// AnnotationNodeTopologyLine indicates the Slurm dynamic topology line (e.g. "topo-switch:s2,topo-block:b2").
+	// AnnotationNodeTopologySpec indicates the Slurm dynamic topology line (e.g. "topo-switch:s2,topo-block:b2").
 	// Ref: https://slurm.schedmd.com/topology.html#dynamic_topo
-	AnnotationNodeTopologyLine = TopologyPrefix + "line"
+	AnnotationNodeTopologySpec = TopologyPrefix + "spec"
 )
 
 // Well Known Labels

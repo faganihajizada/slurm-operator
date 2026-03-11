@@ -574,10 +574,10 @@ func (r *NodeSetReconciler) syncSlurmTopology(
 			return err
 		}
 
-		topologyLine := node.Annotations[slinkyv1beta1.AnnotationNodeTopologyLine]
+		topologyLine := node.Annotations[slinkyv1beta1.AnnotationNodeTopologySpec]
 
 		toUpdate := pod.DeepCopy()
-		toUpdate.Annotations[slinkyv1beta1.AnnotationNodeTopologyLine] = topologyLine
+		toUpdate.Annotations[slinkyv1beta1.AnnotationNodeTopologySpec] = topologyLine
 		if err := r.Patch(ctx, toUpdate, client.StrategicMergeFrom(pod)); err != nil {
 			logger.Error(err, "failed to patch pod annotations", "pod", klog.KObj(pod))
 			return err
