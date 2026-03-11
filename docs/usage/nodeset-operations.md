@@ -99,7 +99,7 @@ kubectl cordon <node>
 The operator reads the annotation and uses its value as the Slurm drain reason,
 prefixed with `slurm-operator:`. The resulting reason in Slurm will be:
 
-```
+```console
 slurm-operator: GPU ECC error detected
 ```
 
