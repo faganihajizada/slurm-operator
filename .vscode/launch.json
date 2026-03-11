@@ -12,9 +12,7 @@
       },
       "args": [
         "--zap-log-level=5"
-      ],
-      "preLaunchTask": "Setup Operator Debugging",
-      "postDebugTask": "Revert Operator Debugging"
+      ]
     }
   ]
 }
