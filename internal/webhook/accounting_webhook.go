@@ -5,7 +5,10 @@ package webhook
 
 import (
 	"context"
+	"errors"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -46,7 +49,14 @@ func (r *AccountingSetWebhook) ValidateCreate(ctx context.Context, accounting *s
 func (r *AccountingSetWebhook) ValidateUpdate(ctx context.Context, oldAccounting, newAccounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate update", "newAccounting", klog.KObj(newAccounting))
 
-	return nil, nil
+	var warns admission.Warnings
+	var errs []error
+
+	if !apiequality.Semantic.DeepEqual(newAccounting.AuthJwtRef(), oldAccounting.AuthJwtRef()) {
+		errs = append(errs, errors.New("the value of JwtKeyRef or JwtHs256KeyRef cannot be modified after deployment"))
+	}
+
+	return warns, utilerrors.NewAggregate(errs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

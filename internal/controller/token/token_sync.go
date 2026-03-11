@@ -131,8 +131,8 @@ func (r *TokenReconciler) getExpTime(ctx context.Context, token *slinkyv1beta1.T
 	if err != nil {
 		return time.Time{}, err
 	}
-	jwtHs256Ref := token.JwtHs256Ref()
-	signingKey, err := r.refResolver.GetSecretKeyRef(ctx, &jwtHs256Ref.SecretKeySelector, jwtHs256Ref.Namespace)
+	jwtRef := token.JwtRef()
+	signingKey, err := r.refResolver.GetSecretKeyRef(ctx, &jwtRef.SecretKeySelector, jwtRef.Namespace)
 	if err != nil {
 		return time.Time{}, err
 	}

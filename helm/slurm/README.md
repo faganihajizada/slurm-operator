@@ -95,7 +95,7 @@ Kubernetes: `>= 1.29.0-0`
 | jwksKeys | object | `{"configMapRef":{},"enabled":false}` | Slurm cluster JWKS authentication keys. Ref: https://slurm.schedmd.com/jwt.html#external_auth |
 | jwksKeys.configMapRef | configMapKeySelector | `{}` | Reference to the configMap. |
 | jwksKeys.enabled | bool | `false` | Enable use of JWKS file. |
-| jwtKey | object | `{"annotations":{},"create":true,"secretRef":{}}` | Slurm cluster JWT HS256 authentication key. Ref: https://slurm.schedmd.com/authentication.html#jwt |
+| jwtKey | object | `{"annotations":{},"create":true,"secretRef":{}}` | Slurm cluster JWT authentication key. Ref: https://slurm.schedmd.com/authentication.html#jwt |
 | jwtKey.annotations | object | `{}` | Annotations to add to the secret upon creation. |
 | jwtKey.create | bool | `true` | The secret will be created when true. |
 | jwtKey.secretRef | secretKeyRef | `{}` | Reference to the secret. |
