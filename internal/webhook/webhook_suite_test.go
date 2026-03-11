@@ -99,7 +99,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&AccountingSetWebhook{}).SetupWebhookWithManager(mgr)
+	err = (&AccountingWebhook{}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = (&ControllerWebhook{

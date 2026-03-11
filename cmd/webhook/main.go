@@ -168,7 +168,7 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Restapi")
 		os.Exit(1)
 	}
-	if err := (&slinkywebhook.AccountingSetWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&slinkywebhook.AccountingWebhook{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Accounting")
 		os.Exit(1)
 	}
