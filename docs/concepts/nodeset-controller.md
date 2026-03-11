@@ -38,19 +38,11 @@ sequenceDiagram
     participant NS as NodeSet Controller
     box Operator Internals
         participant SCM as Slurm Client Map
-        participant SEC as Slurm Event Channel
     end %% Operator Internals
     participant SC as Slurm Client
     participant SAPI as Slurm REST API
 
-    loop Watch Slurm Nodes
-        SC->>+SAPI: Get Slurm Nodes
-        SAPI-->>-SC: Return Slurm Nodes
-        SC->>SEC: Add Event for Cache Delta
-    end %% loop Watch Slurm Nodes
-
     note over KAPI: Handle CR Update
-    SEC-->>NS: Watch Event Channel
     User->>KAPI: Update NodeSet CR
     KAPI-->>NS: Watch NodeSet CRD
     opt Scale-out Replicas
