@@ -2411,7 +2411,7 @@ func TestNodeSetReconciler_syncSlurmTopology(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
 			Annotations: map[string]string{
-				slinkyv1beta1.AnnotationNodeTopologyLine: "topo-block:b0",
+				slinkyv1beta1.AnnotationNodeTopologySpec: "topo-block:b0",
 			},
 		},
 	}
@@ -2490,9 +2490,9 @@ func TestNodeSetReconciler_syncSlurmTopology(t *testing.T) {
 				if err := tt.client.Get(ctx, checkNodeKey, checkNode); err != nil {
 					t.Errorf("Get() failed: %v", err)
 				}
-				topologyLine := checkNode.Annotations[slinkyv1beta1.AnnotationNodeTopologyLine]
-				if !apiequality.Semantic.DeepEqual(checkPod.Annotations[slinkyv1beta1.AnnotationNodeTopologyLine], topologyLine) {
-					t.Errorf("pod and node topology are incongruent: node = '%v' ; pod = '%v'", topologyLine, checkPod.Annotations[slinkyv1beta1.AnnotationNodeTopologyLine])
+				topologyLine := checkNode.Annotations[slinkyv1beta1.AnnotationNodeTopologySpec]
+				if !apiequality.Semantic.DeepEqual(checkPod.Annotations[slinkyv1beta1.AnnotationNodeTopologySpec], topologyLine) {
+					t.Errorf("pod and node topology are incongruent: node = '%v' ; pod = '%v'", topologyLine, checkPod.Annotations[slinkyv1beta1.AnnotationNodeTopologySpec])
 				}
 				sclient := tt.clientMap.Get(tt.nodeset.Spec.ControllerRef.NamespacedName())
 				if sclient == nil {
