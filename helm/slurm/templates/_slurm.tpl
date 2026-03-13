@@ -7,8 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 Define auth/slurm secret ref name
 */}}
 {{- define "slurm.authSlurmRef.name" -}}
-{{- if .Values.slurmKey.secretRef.name }}
-{{- .Values.slurmKey.secretRef.name }}
+{{- $ref := .Values.slurmKey.secretRef | default dict -}}
+{{- if $ref.name }}
+{{- $ref.name }}
 {{- else }}
 {{- printf "%s-auth-slurm" (include "slurm.fullname" .) -}}
 {{- end }}
@@ -18,8 +19,9 @@ Define auth/slurm secret ref name
 Define auth/slurm secret ref key
 */}}
 {{- define "slurm.authSlurmRef.key" -}}
-{{- if .Values.slurmKey.secretRef.key }}
-{{- .Values.slurmKey.secretRef.key }}
+{{- $ref := .Values.slurmKey.secretRef | default dict -}}
+{{- if $ref.key }}
+{{- $ref.key }}
 {{- else }}
 {{- print "slurm.key" -}}
 {{- end }}
@@ -29,8 +31,9 @@ Define auth/slurm secret ref key
 Define auth/jwt secret ref name
 */}}
 {{- define "slurm.authJwtRef.name" -}}
-{{- if .Values.jwtKey.secretRef.name }}
-{{- .Values.jwtKey.secretRef.name }}
+{{- $ref := .Values.jwtKey.secretRef | default dict -}}
+{{- if $ref.name }}
+{{- $ref.name }}
 {{- else }}
 {{- printf "%s-auth-jwt" (include "slurm.fullname" .) -}}
 {{- end }}
@@ -40,8 +43,9 @@ Define auth/jwt secret ref name
 Define auth/jwt secret ref key
 */}}
 {{- define "slurm.authJwtRef.key" -}}
-{{- if .Values.jwtKey.secretRef.key }}
-{{- .Values.jwtKey.secretRef.key }}
+{{- $ref := .Values.jwtKey.secretRef | default dict -}}
+{{- if $ref.key }}
+{{- $ref.key }}
 {{- else }}
 {{- print "jwt.key" -}}
 {{- end }}
@@ -51,8 +55,9 @@ Define auth/jwt secret ref key
 Define JWKS configMap ref name
 */}}
 {{- define "slurm.authJwksRef.name" -}}
-{{- if .Values.jwksKeys.configMapRef.name }}
-{{- .Values.jwksKeys.configMapRef.name }}
+{{- $ref := .Values.jwksKeys.configMapRef | default dict -}}
+{{- if $ref.name }}
+{{- $ref.name }}
 {{- else }}
 {{- printf "%s-auth-jwks" (include "slurm.fullname" .) -}}
 {{- end }}
@@ -62,8 +67,9 @@ Define JWKS configMap ref name
 Define JWKS configMap ref key
 */}}
 {{- define "slurm.authJwksRef.key" -}}
-{{- if .Values.jwksKeys.configMapRef.key }}
-{{- .Values.jwksKeys.configMapRef.key }}
+{{- $ref := .Values.jwksKeys.configMapRef | default dict -}}
+{{- if $ref.key }}
+{{- $ref.key }}
 {{- else }}
 {{- print "jwks.json" -}}
 {{- end }}
