@@ -38,7 +38,7 @@ const (
 	JwksKeyPath           = SlurmEtcDir + "/" + JwksKeyFile
 	JwksAuthAltParameters = "jwks=" + JwksKeyPath
 
-	LogTimeFormat = "iso8601,format_stderr"
+	LogTimeFormat = "thread_id"
 
 	DevNull = "/dev/null"
 
