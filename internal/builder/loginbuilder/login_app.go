@@ -85,7 +85,7 @@ func (b *LoginBuilder) BuildLogin(loginset *slinkyv1beta1.LoginSet) (*appsv1.Dep
 		return nil, fmt.Errorf("failed to build pod template: %w", err)
 	}
 
-	o := &appsv1.Deployment{
+	out := &appsv1.Deployment{
 		ObjectMeta: objectMeta,
 		Spec: appsv1.DeploymentSpec{
 			Replicas:             loginset.Spec.Replicas,
@@ -98,11 +98,11 @@ func (b *LoginBuilder) BuildLogin(loginset *slinkyv1beta1.LoginSet) (*appsv1.Dep
 		},
 	}
 
-	if err := controllerutil.SetControllerReference(loginset, o, b.client.Scheme()); err != nil {
+	if err := controllerutil.SetControllerReference(loginset, out, b.client.Scheme()); err != nil {
 		return nil, fmt.Errorf("failed to set owner controller: %w", err)
 	}
 
-	return o, nil
+	return out, nil
 }
 
 func (b *LoginBuilder) loginPodTemplate(loginset *slinkyv1beta1.LoginSet) (corev1.PodTemplateSpec, error) {

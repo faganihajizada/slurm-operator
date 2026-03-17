@@ -43,7 +43,7 @@ func (b *AccountingBuilder) BuildAccounting(accounting *slinkyv1beta1.Accounting
 		return nil, fmt.Errorf("failed to build pod template: %w", err)
 	}
 
-	o := &appsv1.StatefulSet{
+	out := &appsv1.StatefulSet{
 		ObjectMeta: objectMeta,
 		Spec: appsv1.StatefulSetSpec{
 			PodManagementPolicy:  appsv1.ParallelPodManagement,
@@ -57,11 +57,11 @@ func (b *AccountingBuilder) BuildAccounting(accounting *slinkyv1beta1.Accounting
 		},
 	}
 
-	if err := controllerutil.SetControllerReference(accounting, o, b.client.Scheme()); err != nil {
+	if err := controllerutil.SetControllerReference(accounting, out, b.client.Scheme()); err != nil {
 		return nil, fmt.Errorf("failed to set owner controller: %w", err)
 	}
 
-	return o, nil
+	return out, nil
 }
 
 func (b *AccountingBuilder) accountingPodTemplate(accounting *slinkyv1beta1.Accounting) (corev1.PodTemplateSpec, error) {
