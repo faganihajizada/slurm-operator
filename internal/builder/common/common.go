@@ -6,14 +6,18 @@ package common
 import (
 	_ "embed"
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
+	"k8s.io/utils/set"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
 	"github.com/SlinkyProject/slurm-operator/internal/builder/labels"
+	"github.com/SlinkyProject/slurm-operator/internal/utils/config"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/domainname"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/structutils"
 )
@@ -238,4 +242,31 @@ func JwksConfigProjection(configMap *corev1.ConfigMapKeySelector, path string) c
 			{Key: configMap.Key, Path: path},
 		},
 	}
+}
+
+// BuildMergedConfig returns a slurm.conf snippet containing merged parameter options.
+func BuildMergedConfig(confRaw string, mergeConfig map[string][]string) string {
+	conf := config.NewBuilder().WithFinalNewline(false)
+
+	paramKeys := structutils.Keys(mergeConfig)
+	slices.Sort(paramKeys)
+	for _, pKey := range paramKeys {
+		r := regexp.MustCompile(fmt.Sprintf(`(?im)^%s=[^\n ]+$`, pKey))
+		found := r.FindStringSubmatch(confRaw)
+		mergeVals := mergeConfig[pKey]
+		if len(found) > 0 {
+			items := strings.Split(found[0], "=")
+			_, val := items[0], items[1]
+			valList := strings.Split(val, ",")
+			mergeVals = append(mergeVals, valList...)
+			vals := []string{}
+			for _, v := range mergeVals {
+				vals = append(vals, strings.ToLower(v))
+			}
+			mergeVals = set.New(vals...).SortedList()
+			conf.AddProperty(config.NewProperty(pKey, strings.Join(mergeVals, ",")))
+		}
+	}
+
+	return conf.Build()
 }

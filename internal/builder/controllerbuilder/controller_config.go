@@ -167,6 +167,26 @@ func buildSlurmConf(
 	prologSlurmctldScripts, epilogSlurmctldScripts []string,
 	cgroupEnabled bool,
 ) string {
+	mergeConfig := map[string][]string{
+		"SlurmctldParameters": func() []string {
+			params := []string{"enable_configless"}
+			if cgroupEnabled {
+				params = append(params, "enable_stepmgr")
+			}
+			return params
+		}(),
+		"AuthInfo": {
+			common.AuthInfo,
+		},
+		"AuthAltParameters": func() []string {
+			params := []string{common.JwtAuthAltParameters}
+			if controller.AuthJwksRef() != nil {
+				params = append(params, common.JwksAuthAltParameters)
+			}
+			return params
+		}(),
+	}
+
 	controllerHost := fmt.Sprintf("%s(%s)", controller.PrimaryName(), controller.ServiceFQDNShort())
 
 	conf := config.NewBuilder()
@@ -197,21 +217,14 @@ func buildSlurmConf(
 	conf.AddProperty(config.NewProperty("AuthType", common.AuthType))
 	conf.AddProperty(config.NewProperty("CredType", common.CredType))
 	conf.AddProperty(config.NewProperty("AuthAltTypes", common.AuthAltTypes))
-
-	jwksEnabled := controller.Spec.JwksKeyRef != nil
-	if jwksEnabled {
-		conf.AddProperty(config.NewProperty("AuthAltParameters", common.JwtAuthAltParameters+","+common.JwksAuthAltParameters))
-	} else {
-		conf.AddProperty(config.NewProperty("AuthAltParameters", common.JwtAuthAltParameters))
-	}
-	conf.AddProperty(config.NewProperty("AuthInfo", common.AuthInfo))
+	conf.AddProperty(config.NewProperty("AuthAltParameters", strings.Join(mergeConfig["AuthAltParameters"], ",")))
+	conf.AddProperty(config.NewProperty("AuthInfo", strings.Join(mergeConfig["AuthInfo"], ",")))
+	conf.AddProperty(config.NewProperty("SlurmctldParameters", strings.Join(mergeConfig["SlurmctldParameters"], ",")))
 	if cgroupEnabled {
-		conf.AddProperty(config.NewProperty("SlurmctldParameters", "enable_configless,enable_stepmgr"))
 		conf.AddProperty(config.NewProperty("ProctrackType", "proctrack/cgroup"))
 		conf.AddProperty(config.NewProperty("PrologFlags", "Contain"))
 		conf.AddProperty(config.NewProperty("TaskPlugin", "task/affinity,task/cgroup"))
 	} else {
-		conf.AddProperty(config.NewProperty("SlurmctldParameters", "enable_configless"))
 		conf.AddProperty(config.NewProperty("ProctrackType", "proctrack/linuxproc"))
 		conf.AddProperty(config.NewProperty("TaskPlugin", "task/affinity"))
 	}
@@ -261,6 +274,12 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewPropertyRaw("#"))
 		conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
 		conf.AddProperty(config.NewPropertyRaw(extraConf))
+	}
+
+	if snippet := common.BuildMergedConfig(extraConf, mergeConfig); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw("#"))
+		conf.AddProperty(config.NewPropertyRaw("### MERGED CONFIG ###"))
+		conf.AddProperty(config.NewPropertyRaw(snippet))
 	}
 
 	return conf.Build()
