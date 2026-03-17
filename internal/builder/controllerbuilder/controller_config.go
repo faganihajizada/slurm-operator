@@ -205,8 +205,6 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewProperty("AuthAltParameters", common.JwtAuthAltParameters))
 	}
 	conf.AddProperty(config.NewProperty("AuthInfo", common.AuthInfo))
-	conf.AddProperty(config.NewProperty("CommunicationParameters", "block_null_hash"))
-	conf.AddProperty(config.NewProperty("SelectTypeParameters", "CR_Core_Memory"))
 	if cgroupEnabled {
 		conf.AddProperty(config.NewProperty("SlurmctldParameters", "enable_configless,enable_stepmgr"))
 		conf.AddProperty(config.NewProperty("ProctrackType", "proctrack/cgroup"))
