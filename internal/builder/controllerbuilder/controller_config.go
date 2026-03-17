@@ -241,21 +241,29 @@ func buildSlurmConf(
 	}
 
 	if snippet := buildPrologEpilogSlurmctldConf(prologSlurmctldScripts, epilogSlurmctldScripts); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw("#"))
+		conf.AddProperty(config.NewPropertyRaw("### SLURMCTLD PROLOG & EPILOG ###"))
 		conf.AddProperty(config.NewPropertyRaw(snippet))
 	}
 
 	if snippet := buildPrologEpilogConf(prologScripts, epilogScripts); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw("#"))
+		conf.AddProperty(config.NewPropertyRaw("### PROLOG & EPILOG ###"))
 		conf.AddProperty(config.NewPropertyRaw(snippet))
 	}
 
 	if snippet := buildNodeSetConf(nodesetList); snippet != "" {
+		conf.AddProperty(config.NewPropertyRaw("#"))
+		conf.AddProperty(config.NewPropertyRaw("### COMPUTE & PARTITION ###"))
 		conf.AddProperty(config.NewPropertyRaw(snippet))
 	}
 
 	extraConf := controller.Spec.ExtraConf
-	conf.AddProperty(config.NewPropertyRaw("#"))
-	conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
-	conf.AddProperty(config.NewPropertyRaw(extraConf))
+	if extraConf != "" {
+		conf.AddProperty(config.NewPropertyRaw("#"))
+		conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
+		conf.AddProperty(config.NewPropertyRaw(extraConf))
+	}
 
 	return conf.Build()
 }
@@ -270,10 +278,6 @@ func buildPrologEpilogSlurmctldConf(prologSlurmctldScripts, epilogSlurmctldScrip
 
 	sort.Strings(prologSlurmctldScripts)
 	sort.Strings(epilogSlurmctldScripts)
-	if len(prologSlurmctldScripts) > 0 || len(epilogSlurmctldScripts) > 0 {
-		conf.AddProperty(config.NewPropertyRaw("#"))
-		conf.AddProperty(config.NewPropertyRaw("### SLURMCTLD PROLOG & EPILOG ###"))
-	}
 	for _, filename := range prologSlurmctldScripts {
 		scriptPath := path.Join(common.SlurmEtcDir, filename)
 		conf.AddProperty(config.NewProperty("PrologSlurmctld", scriptPath))
@@ -296,10 +300,6 @@ func buildPrologEpilogConf(prologScripts, epilogScripts []string) string {
 
 	sort.Strings(prologScripts)
 	sort.Strings(epilogScripts)
-	if len(prologScripts) > 0 || len(epilogScripts) > 0 {
-		conf.AddProperty(config.NewPropertyRaw("#"))
-		conf.AddProperty(config.NewPropertyRaw("### PROLOG & EPILOG ###"))
-	}
 	for _, filename := range prologScripts {
 		conf.AddProperty(config.NewProperty("Prolog", filename))
 	}
@@ -320,10 +320,6 @@ func buildNodeSetConf(nodesetList *slinkyv1beta1.NodeSetList) string {
 	sort.Slice(nodesetList.Items, func(i, j int) bool {
 		return nodesetList.Items[i].Name < nodesetList.Items[j].Name
 	})
-	if len(nodesetList.Items) > 0 {
-		conf.AddProperty(config.NewPropertyRaw("#"))
-		conf.AddProperty(config.NewPropertyRaw("### COMPUTE & PARTITION ###"))
-	}
 	for _, nodeset := range nodesetList.Items {
 		name := nodeset.Name
 		template := nodeset.Spec.Template.PodSpecWrapper

@@ -79,9 +79,11 @@ func buildSlurmdbdConf(accounting *slinkyv1beta1.Accounting, storagePass string)
 	conf.AddProperty(config.NewProperty("LogTimeFormat", common.LogTimeFormat))
 
 	extraConf := accounting.Spec.ExtraConf
-	conf.AddProperty(config.NewPropertyRaw("#"))
-	conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
-	conf.AddProperty(config.NewPropertyRaw(extraConf))
+	if extraConf != "" {
+		conf.AddProperty(config.NewPropertyRaw("#"))
+		conf.AddProperty(config.NewPropertyRaw("### EXTRA CONFIG ###"))
+		conf.AddProperty(config.NewPropertyRaw(extraConf))
+	}
 
 	return conf.Build()
 }
