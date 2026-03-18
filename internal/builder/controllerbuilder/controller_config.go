@@ -254,7 +254,7 @@ func buildSlurmConf(
 
 	if snippet := buildNodeSetConf(nodesetList); snippet != "" {
 		conf.AddProperty(config.NewPropertyRaw("#"))
-		conf.AddProperty(config.NewPropertyRaw("### COMPUTE & PARTITION ###"))
+		conf.AddProperty(config.NewPropertyRaw("### NODESET & PARTITION ###"))
 		conf.AddProperty(config.NewPropertyRaw(snippet))
 	}
 
