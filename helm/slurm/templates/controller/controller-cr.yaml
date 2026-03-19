@@ -46,7 +46,7 @@ spec:
   clusterName: {{ . }}
   {{- end }}{{- /* with .Values.clusterName */}}
   {{- if (include "slurm.controller.extraConf" .) }}
-  extraConf: |
+  extraConf: |-
     {{- include "slurm.controller.extraConf" . | nindent 4 }}
   {{- end }}{{- /* if (include "slurm.controller.extraConf" .) */}}
   {{- with .Values.configFiles }}

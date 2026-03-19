@@ -14,8 +14,7 @@ manifest should match snapshot:
       epilogScriptRefs:
         - name: test-release-slurm-epilog-dcgm
       epilogSlurmctldScriptRefs: null
-      extraConf: |
-        PartitionName=all Nodes=ALL Default=YES MaxTime=UNLIMITED State=UP
+      extraConf: PartitionName=all Nodes=ALL Default=YES MaxTime=UNLIMITED State=UP
       jwtKeyRef:
         key: jwt.key
         name: test-release-slurm-auth-jwt

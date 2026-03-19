@@ -255,3 +255,81 @@ func TestCommonBuilder_GetPodResourceLimits(t *testing.T) {
 		})
 	}
 }
+
+func Test_BuildMergedConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		confRaw         string
+		mergeParameters map[string][]string
+		want            string
+	}{
+		{
+			name:            "empty",
+			confRaw:         ``,
+			mergeParameters: make(map[string][]string),
+			want:            ``,
+		},
+		{
+			name:    "empty, with mergeParams",
+			confRaw: ``,
+			mergeParameters: map[string][]string{
+				"Foo": {"bar", "baz"},
+			},
+			want: ``,
+		},
+		{
+			name:    "merge with mergeParams",
+			confRaw: `Foo=fizz,buzz`,
+			mergeParameters: map[string][]string{
+				"Foo": {"bar", "baz"},
+			},
+			want: `Foo=bar,baz,buzz,fizz`,
+		},
+		{
+			name:    "merge, with overlap",
+			confRaw: `Foo=fizz,overlap,buzz`,
+			mergeParameters: map[string][]string{
+				"Foo": {"bar", "overlap", "baz"},
+			},
+			want: `Foo=bar,baz,buzz,fizz,overlap`,
+		},
+		{
+			name: "merge multiple, with overlap",
+			confRaw: `Stuff0=junk
+Foo=bar,overlap
+Stuff1=junk
+Fizz=buzz,overlap
+Stuff2=junk`,
+			mergeParameters: map[string][]string{
+				"Foo":   {"thing", "overlap"},
+				"Fizz":  {"thing", "overlap"},
+				"Other": {"thing"},
+			},
+			want: `Fizz=buzz,overlap,thing
+Foo=bar,overlap,thing`,
+		},
+		{
+			name: "merge multiple, with overlap, mixed case",
+			confRaw: `Stuff0=junk
+foo=bar,overlap
+Stuff1=junk
+fizz=buzz,overlap
+Stuff2=junk`,
+			mergeParameters: map[string][]string{
+				"Foo":   {"Thing", "Overlap"},
+				"Fizz":  {"Thing", "Overlap"},
+				"Other": {"Thing"},
+			},
+			want: `Fizz=buzz,overlap,thing
+Foo=bar,overlap,thing`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildMergedConfig(tt.confRaw, tt.mergeParameters)
+			if got != tt.want {
+				t.Errorf("buildMergedParameters() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

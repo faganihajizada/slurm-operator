@@ -43,7 +43,7 @@ func (b *ControllerBuilder) BuildController(controller *slinkyv1beta1.Controller
 		return nil, fmt.Errorf("failed to build pod template: %w", err)
 	}
 
-	o := &appsv1.StatefulSet{
+	out := &appsv1.StatefulSet{
 		ObjectMeta: objectMeta,
 		Spec: appsv1.StatefulSetSpec{
 			PodManagementPolicy:  appsv1.ParallelPodManagement,
@@ -68,7 +68,7 @@ func (b *ControllerBuilder) BuildController(controller *slinkyv1beta1.Controller
 				},
 			},
 		}
-		o.Spec.Template.Spec.Volumes = append(o.Spec.Template.Spec.Volumes, volume)
+		out.Spec.Template.Spec.Volumes = append(out.Spec.Template.Spec.Volumes, volume)
 	case isPersistenceEnabled:
 		volumeClaimTemplate := corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
@@ -77,7 +77,7 @@ func (b *ControllerBuilder) BuildController(controller *slinkyv1beta1.Controller
 			},
 			Spec: persistence.PersistentVolumeClaimSpec,
 		}
-		o.Spec.VolumeClaimTemplates = append(o.Spec.VolumeClaimTemplates, volumeClaimTemplate)
+		out.Spec.VolumeClaimTemplates = append(out.Spec.VolumeClaimTemplates, volumeClaimTemplate)
 	default:
 		volume := corev1.Volume{
 			Name: common.SlurmctldStateSaveVolume,
@@ -85,14 +85,14 @@ func (b *ControllerBuilder) BuildController(controller *slinkyv1beta1.Controller
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		}
-		o.Spec.Template.Spec.Volumes = append(o.Spec.Template.Spec.Volumes, volume)
+		out.Spec.Template.Spec.Volumes = append(out.Spec.Template.Spec.Volumes, volume)
 	}
 
-	if err := controllerutil.SetControllerReference(controller, o, b.client.Scheme()); err != nil {
+	if err := controllerutil.SetControllerReference(controller, out, b.client.Scheme()); err != nil {
 		return nil, fmt.Errorf("failed to set owner controller: %w", err)
 	}
 
-	return o, nil
+	return out, nil
 }
 
 func (b *ControllerBuilder) controllerPodTemplate(controller *slinkyv1beta1.Controller) (corev1.PodTemplateSpec, error) {
