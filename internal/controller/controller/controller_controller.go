@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/flowcontrol"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +34,11 @@ const (
 
 	// BackoffGCInterval is the time that has to pass before next iteration of backoff GC is run
 	BackoffGCInterval = 1 * time.Minute
+)
+
+// Reasons for Controller events
+const (
+	SyncFailedReason = "SyncFailed"
 )
 
 func init() {
@@ -59,7 +64,7 @@ type ControllerReconciler struct {
 
 	builder       *builder.ControllerBuilder
 	refResolver   *refresolver.RefResolver
-	eventRecorder record.EventRecorderLogger
+	eventRecorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=slinky.slurm.net,resources=controllers,verbs=get;list;watch;create;update;patch;delete
@@ -71,6 +76,7 @@ type ControllerReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -107,6 +113,7 @@ func (r *ControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.eventRecorder = mgr.GetEventRecorder(ControllerName)
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(ControllerName).
 		For(&slinkyv1beta1.Controller{}).
@@ -125,7 +132,6 @@ func (r *ControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func NewReconciler(c client.Client, cm *clientmap.ClientMap) *ControllerReconciler {
 	s := c.Scheme()
-	es := corev1.EventSource{Component: ControllerName}
 	return &ControllerReconciler{
 		Client: c,
 		Scheme: s,
@@ -134,6 +140,6 @@ func NewReconciler(c client.Client, cm *clientmap.ClientMap) *ControllerReconcil
 
 		builder:       builder.New(c),
 		refResolver:   refresolver.New(c),
-		eventRecorder: record.NewBroadcaster().NewRecorder(s, es),
+		eventRecorder: events.NewFakeRecorder(100),
 	}
 }

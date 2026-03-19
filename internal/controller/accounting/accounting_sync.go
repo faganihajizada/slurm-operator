@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
@@ -20,23 +21,23 @@ import (
 
 type SyncStep struct {
 	Name string
-	Sync func(ctx context.Context, cluster *slinkyv1beta1.Accounting) error
+	Sync func(ctx context.Context, accounting *slinkyv1beta1.Accounting) error
 }
 
 // Sync implements control logic for synchronizing a Accounting.
 func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) error {
 	logger := log.FromContext(ctx)
 
-	cluster := &slinkyv1beta1.Accounting{}
-	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
+	accounting := &slinkyv1beta1.Accounting{}
+	if err := r.Get(ctx, req.NamespacedName, accounting); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("Accounting has been deleted", "request", req)
 			return nil
 		}
 		return err
 	}
-	cluster = cluster.DeepCopy()
-	defaults.SetAccountingDefaults(cluster)
+	accounting = accounting.DeepCopy()
+	defaults.SetAccountingDefaults(accounting)
 
 	syncSteps := []SyncStep{
 		{
@@ -49,7 +50,7 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, accounting, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -65,7 +66,7 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, accounting, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -81,7 +82,7 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, accounting, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -90,16 +91,18 @@ func (r *AccountingReconciler) Sync(ctx context.Context, req reconcile.Request) 
 	}
 
 	for _, s := range syncSteps {
-		if err := s.Sync(ctx, cluster); err != nil {
-			e := fmt.Errorf("[%s]: %w", s.Name, err)
-			errors := []error{e}
-			if err := r.syncStatus(ctx, cluster); err != nil {
-				e := fmt.Errorf("[%s]: %w", s.Name, err)
-				errors = append(errors, e)
+		if err := s.Sync(ctx, accounting); err != nil {
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(accounting, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
+			e := fmt.Errorf("failed %q step: %w", s.Name, err)
+			errs := []error{e}
+			if err := r.syncStatus(ctx, accounting); err != nil {
+				e := fmt.Errorf("failed status sync: %w", err)
+				errs = append(errs, e)
 			}
-			return utilerrors.NewAggregate(errors)
+			return utilerrors.NewAggregate(errs)
 		}
 	}
 
-	return r.syncStatus(ctx, cluster)
+	return r.syncStatus(ctx, accounting)
 }

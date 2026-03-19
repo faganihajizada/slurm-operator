@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
@@ -21,6 +22,12 @@ import (
 	"github.com/SlinkyProject/slurm-operator/internal/defaults"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/objectutils"
 	jwt "github.com/golang-jwt/jwt/v5"
+)
+
+// Reasons for Token events
+const (
+	SyncSucceededReason = "SyncSucceeded"
+	SyncFailedReason    = "SyncFailed"
 )
 
 type SyncStep struct {
@@ -63,7 +70,7 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, false); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, token, object, false); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -102,7 +109,7 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, token, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 
@@ -113,13 +120,15 @@ func (r *TokenReconciler) Sync(ctx context.Context, req reconcile.Request) error
 
 	for _, s := range syncSteps {
 		if err := s.Sync(ctx, token); err != nil {
-			e := fmt.Errorf("[%s]: %w", s.Name, err)
-			errors := []error{e}
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(token, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
+			e := fmt.Errorf("failed %q step: %w", s.Name, err)
+			errs := []error{e}
 			if err := r.syncStatus(ctx, token); err != nil {
-				e := fmt.Errorf("[%s]: %w", s.Name, err)
-				errors = append(errors, e)
+				e := fmt.Errorf("failed status sync: %w", err)
+				errs = append(errs, e)
 			}
-			return utilerrors.NewAggregate(errors)
+			return utilerrors.NewAggregate(errs)
 		}
 	}
 

@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 	kubecontroller "k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/history"
@@ -54,7 +54,7 @@ import (
 )
 
 func newNodeSetController(client client.Client, clientMap *clientmap.ClientMap) *NodeSetReconciler {
-	eventRecorder := record.NewFakeRecorder(10)
+	eventRecorder := events.NewFakeRecorder(10)
 	r := &NodeSetReconciler{
 		Client:         client,
 		Scheme:         client.Scheme(),
@@ -495,7 +495,7 @@ func TestNodeSetReconciler_sync(t *testing.T) {
 	}
 }
 
-func TestNodeSetReconciler_syncNodeSet(t *testing.T) {
+func TestNodeSetReconciler_syncNodeSetPods(t *testing.T) {
 	type fields struct {
 		Client    client.Client
 		ClientMap *clientmap.ClientMap
@@ -517,14 +517,14 @@ func TestNodeSetReconciler_syncNodeSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.syncNodeSet(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.syncNodeSet() error = %v, wantErr %v", err, tt.wantErr)
+			if err := r.syncNodeSetPods(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.syncNodeSetPods() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestNodeSetReconciler_syncTaint(t *testing.T) {
+func TestNodeSetReconciler_syncNodeTaint(t *testing.T) {
 
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{
@@ -537,7 +537,7 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 	podNoTaint.Spec.NodeName = "node1"
 	podNoTaint.Status.Phase = corev1.PodRunning
 	if err := controllerutil.SetControllerReference(nodesetNoTaint, podNoTaint, clientgoscheme.Scheme); err != nil {
-		t.Errorf("TestNodeSetReconciler_syncTaint() unable to SetControllerReference to %v for %v: %v", nodesetNoTaint, podNoTaint, err)
+		t.Errorf("TestNodeSetReconciler_syncNodeTaint() unable to SetControllerReference to %v for %v: %v", nodesetNoTaint, podNoTaint, err)
 	}
 
 	nodesetTaint := newNodeSet("bar", controller.Name, 2)
@@ -547,7 +547,7 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 	podTaint.Spec.NodeName = "node1"
 	podTaint.Status.Phase = corev1.PodRunning
 	if err := controllerutil.SetControllerReference(nodesetTaint, podTaint, clientgoscheme.Scheme); err != nil {
-		t.Errorf("TestNodeSetReconciler_syncTaint() unable to SetControllerReference to %v for %v: %v", nodesetTaint, podTaint, err)
+		t.Errorf("TestNodeSetReconciler_syncNodeTaint() unable to SetControllerReference to %v for %v: %v", nodesetTaint, podTaint, err)
 	}
 
 	node := corev1.Node{
@@ -710,16 +710,16 @@ func TestNodeSetReconciler_syncTaint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
-			if err := r.syncTaint(ctx); (err != nil) != tt.wantErr {
-				t.Errorf("NodeSetReconciler.syncTaint() error = %v, wantErr %v", err, tt.wantErr)
+			if err := r.syncNodeTaint(ctx); (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.syncNodeTaint() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			node := &corev1.Node{}
 			key := client.ObjectKeyFromObject(tt.args.node)
 			if err := r.Get(tt.args.ctx, key, node); err != nil {
-				t.Errorf("NodeSetReconciler.syncTaint() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NodeSetReconciler.syncNodeTaint() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantTaint != taints.TaintExists(node.Spec.Taints, &slurmtaints.TaintNodeWorker) {
-				t.Errorf("NodeSetReconciler.syncTaint() slice.Contains(node.Spec.Taints, slurmtaints.TaintNodeWorker) = %v, wantTaintNoExecute = %v", node.Spec.Taints, tt.wantTaint)
+				t.Errorf("NodeSetReconciler.syncNodeTaint() slice.Contains(node.Spec.Taints, slurmtaints.TaintNodeWorker) = %v, wantTaintNoExecute = %v", node.Spec.Taints, tt.wantTaint)
 			}
 		})
 	}

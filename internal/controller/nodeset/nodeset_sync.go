@@ -230,6 +230,11 @@ func (r *NodeSetReconciler) canAdoptFunc(nodeset *slinkyv1beta1.NodeSet) func(ct
 	})
 }
 
+type SyncStep struct {
+	Name string
+	Sync func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, hash string) error
+}
+
 // sync is the main reconciliation logic.
 func (r *NodeSetReconciler) sync(
 	ctx context.Context,
@@ -237,44 +242,75 @@ func (r *NodeSetReconciler) sync(
 	pods []*corev1.Pod,
 	hash string,
 ) error {
-	if err := r.slurmControl.RefreshNodeCache(ctx, nodeset); err != nil {
-		return err
+	syncSteps := []SyncStep{
+		{
+			Name: "RefreshNodeCache",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.slurmControl.RefreshNodeCache(ctx, nodeset)
+			},
+		},
+		{
+			Name: "ClusterWorkerService",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncClusterWorkerService(ctx, nodeset)
+			},
+		},
+		{
+			Name: "ClusterWorkerPDB",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncClusterWorkerPDB(ctx, nodeset)
+			},
+		},
+		{
+			Name: "SSHConfig",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncSshConfig(ctx, nodeset)
+			},
+		},
+		{
+			Name: "SlurmNodes",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncSlurmNodes(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "SlurmDeadline",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncSlurmDeadline(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "SlurmTopology",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncSlurmTopology(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "Cordon",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, _ string) error {
+				return r.syncCordon(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "NodeTaint",
+			Sync: func(ctx context.Context, _ *slinkyv1beta1.NodeSet, _ []*corev1.Pod, _ string) error {
+				return r.syncNodeTaint(ctx)
+			},
+		},
+		{
+			Name: "NodeSetPods",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod, hash string) error {
+				return r.syncNodeSetPods(ctx, nodeset, pods, hash)
+			},
+		},
 	}
 
-	if err := r.syncClusterWorkerService(ctx, nodeset); err != nil {
-		return err
-	}
-
-	if err := r.syncClusterWorkerPDB(ctx, nodeset); err != nil {
-		return err
-	}
-
-	if err := r.syncSshConfig(ctx, nodeset); err != nil {
-		return err
-	}
-
-	if err := r.syncSlurmNodes(ctx, nodeset, pods); err != nil {
-		return err
-	}
-
-	if err := r.syncSlurmDeadline(ctx, nodeset, pods); err != nil {
-		return err
-	}
-
-	if err := r.syncSlurmTopology(ctx, nodeset, pods); err != nil {
-		return err
-	}
-
-	if err := r.syncCordon(ctx, nodeset, pods); err != nil {
-		return err
-	}
-
-	if err := r.syncTaint(ctx); err != nil {
-		return err
-	}
-
-	if err := r.syncNodeSet(ctx, nodeset, pods, hash); err != nil {
-		return err
+	for _, s := range syncSteps {
+		if err := s.Sync(ctx, nodeset, pods, hash); err != nil {
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
+			return err
+		}
 	}
 
 	return nil
@@ -299,7 +335,7 @@ func (r *NodeSetReconciler) syncClusterWorkerService(ctx context.Context, nodese
 		return err
 	}
 
-	if err := objectutils.SyncObject(r.Client, ctx, service, true); err != nil {
+	if err := objectutils.SyncObject(r.Client, ctx, nil, nil, service, true); err != nil {
 		return fmt.Errorf("failed to sync service (%s): %w", klog.KObj(service), err)
 	}
 
@@ -368,6 +404,9 @@ func (r *NodeSetReconciler) syncCordon(
 				reason = value
 			}
 
+			r.eventRecorder.Eventf(nodeset, pod, corev1.EventTypeNormal, NodeCordonReason, "",
+				"Cordoning Pod %s: Kubernetes node %s was cordoned", klog.KObj(pod), name)
+
 			if err := r.makePodCordonAndDrain(ctx, nodeset, pod, reason); err != nil {
 				return err
 			}
@@ -396,8 +435,8 @@ func (r *NodeSetReconciler) syncCordon(
 	return nil
 }
 
-// syncTaint ensures that a NoExecute taint is applied to all nodes running NodeSets
-func (r *NodeSetReconciler) syncTaint(
+// syncNodeTaint ensures that a NoExecute taint is applied to all nodes running NodeSets
+func (r *NodeSetReconciler) syncNodeTaint(
 	ctx context.Context,
 ) error {
 	// Build a list of Kube nodes
@@ -500,6 +539,8 @@ func (r *NodeSetReconciler) syncSlurmNodes(
 		}
 		logger.Info("Deleting NodeSet pod, Slurm node is not registered but pod is healthy",
 			"pod", klog.KObj(pod))
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SlurmNodeNotRegisteredReason, "",
+			"Deleting Pod %s: Slurm node is not registered but pod is healthy", klog.KObj(pod))
 		if err := r.Delete(ctx, pod); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
@@ -734,14 +775,14 @@ func (r *NodeSetReconciler) podsShouldBeOnNode(
 				msg := fmt.Sprintf("Found failed daemon pod %s/%s on node %s, will try to kill it", pod.Namespace, pod.Name, node.Name)
 				logger.V(2).Info("Found failed daemon pod on node, will try to kill it", "pod", klog.KObj(pod), "node", klog.KObj(node))
 				// Emit an event so that it's discoverable to users.
-				r.eventRecorder.Eventf(nodeset, corev1.EventTypeWarning, FailedDaemonPodReason, msg)
+				r.eventRecorder.Eventf(nodeset, pod, corev1.EventTypeWarning, FailedDaemonPodReason, "Info", msg)
 				podsToDelete = append(podsToDelete, pod)
 
 			case pod.Status.Phase == corev1.PodSucceeded:
 				msg := fmt.Sprintf("Found succeeded daemon pod %s/%s on node %s, will try to delete it", pod.Namespace, pod.Name, node.Name)
 				logger.V(2).Info("Found succeeded daemon pod on node, will try to delete it", "pod", klog.KObj(pod), "node", klog.KObj(node))
 				// Emit an event so that it's discoverable to users.
-				r.eventRecorder.Eventf(nodeset, corev1.EventTypeNormal, SucceededDaemonPodReason, msg)
+				r.eventRecorder.Eventf(nodeset, pod, corev1.EventTypeNormal, SucceededDaemonPodReason, "Info", msg)
 				podsToDelete = append(podsToDelete, pod)
 
 			default:
@@ -771,12 +812,12 @@ func (r *NodeSetReconciler) podsShouldBeOnNode(
 	return nodesNeedingDaemonPods, podsToDelete
 }
 
-// syncNodeSet will reconcile NodeSet pod replica counts.
+// syncNodeSetPods will reconcile NodeSet pod replica counts.
 // Pods will be:
 //   - Scaled out when: `replicaCount < replicasWant“
 //   - Scaled in when: `replicaCount > replicasWant“
 //   - Processed when: `replicaCount == replicasWant“
-func (r *NodeSetReconciler) syncNodeSet(
+func (r *NodeSetReconciler) syncNodeSetPods(
 	ctx context.Context,
 	nodeset *slinkyv1beta1.NodeSet,
 	pods []*corev1.Pod,
@@ -821,10 +862,18 @@ func (r *NodeSetReconciler) syncNodeSet(
 			podsToCreate[i] = pod
 		}
 		if len(podsToDelete) > 0 || len(podsToCreate) > 0 {
+			if len(podsToCreate) > 0 {
+				r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, ScalingUpReason, "ScaleUp",
+					"Creating %d daemon Pod(s)", len(podsToCreate))
+			}
+			if len(podsToDelete) > 0 {
+				r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, ScalingDownReason, "ScaleDown",
+					"Deleting %d daemon Pod(s)", len(podsToDelete))
+			}
 			return r.doPodScale(ctx, nodeset, podsNewScaling, podsToDelete, podsToCreate)
 		}
 	} else {
-		logger.V(2).Info("Processing NodeSet pods for replica scaling")
+		logger.V(2).Info("Processing NodeSet pods in StatefulSet mode")
 
 		// Handle replica scaling by comparing the known pods to the target number of replicas.
 		// Create or delete pods as needed to reach the target number.
@@ -851,10 +900,14 @@ func (r *NodeSetReconciler) syncNodeSet(
 				podsToCreate[i] = pod
 			}
 			logger.V(2).Info("Too few NodeSet pods", "need", replicaCount, "creating", diff)
+			r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, ScalingUpReason, "ScaleUp",
+				"Creating %d Pod(s) to stabilize at %d replicas", diff, replicaCount)
 			return r.doPodScale(ctx, nodeset, podsNewScaling, nil, podsToCreate)
 		}
 		if diff > 0 {
 			logger.V(2).Info("Too many NodeSet pods", "need", replicaCount, "deleting", diff)
+			r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, ScalingDownReason, "ScaleDown",
+				"Deleting %d Pod(s) to stabilize at %d replicas", diff, replicaCount)
 			podsToDelete, podsToKeep := nodesetutils.SplitActivePods(podsNewScaling, diff)
 			return r.doPodScale(ctx, nodeset, podsToKeep, podsToDelete, nil)
 		}
@@ -988,6 +1041,8 @@ func (r *NodeSetReconciler) newNodeSetPodDaemon(
 	controller := &slinkyv1beta1.Controller{}
 	key := nodeset.Spec.ControllerRef.NamespacedName()
 	if err := r.Get(ctx, key, controller); err != nil {
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, ControllerRefFailedReason, "Info",
+			"Failed to get Controller (%s): %v", key, err)
 		return nil, err
 	}
 	if nodeName == "" {
@@ -1008,6 +1063,8 @@ func (r *NodeSetReconciler) newNodeSetPodOrdinal(
 	controller := &slinkyv1beta1.Controller{}
 	key := nodeset.Spec.ControllerRef.NamespacedName()
 	if err := r.Get(ctx, key, controller); err != nil {
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, ControllerRefFailedReason, "Info",
+			"Failed to get Controller (%s): %v", key, err)
 		return nil, err
 	}
 
@@ -1366,6 +1423,8 @@ func (r *NodeSetReconciler) syncRollingUpdate(
 	if len(unhealthyPods) > 0 {
 		logger.Info("Delete unhealthy pods for Rolling Update",
 			"unhealthyPods", len(unhealthyPods))
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, RollingUpdateReason, "RollingUpdate",
+			"Rolling update: deleting %d unhealthy old pod(s)", len(unhealthyPods))
 		if err := r.doPodScale(ctx, nodeset, nil, unhealthyPods, nil); err != nil {
 			return err
 		}
@@ -1375,6 +1434,8 @@ func (r *NodeSetReconciler) syncRollingUpdate(
 	if len(podsToDelete) > 0 {
 		logger.Info("Scale-in pods for Rolling Update",
 			"delete", len(podsToDelete))
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, RollingUpdateReason, "RollingUpdate",
+			"Rolling update: replacing %d old pod(s) with updated revision", len(podsToDelete))
 		if err := r.doPodScale(ctx, nodeset, nil, podsToDelete, nil); err != nil {
 			return err
 		}
@@ -1467,7 +1528,7 @@ func (r *NodeSetReconciler) syncClusterWorkerPDB(
 	}
 
 	// Sync the PodDisruptionBudget for each cluster
-	if err := objectutils.SyncObject(r.Client, ctx, podDisruptionBudget, true); err != nil {
+	if err := objectutils.SyncObject(r.Client, ctx, nil, nil, podDisruptionBudget, true); err != nil {
 		return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(podDisruptionBudget), err)
 	}
 
@@ -1489,7 +1550,7 @@ func (r *NodeSetReconciler) syncSshConfig(
 		return fmt.Errorf("failed to build SSH config: %w", err)
 	}
 
-	if err := objectutils.SyncObject(r.Client, ctx, config, true); err != nil {
+	if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, nodeset, config, true); err != nil {
 		return fmt.Errorf("failed to sync SSH config (%s): %w", klog.KObj(config), err)
 	}
 

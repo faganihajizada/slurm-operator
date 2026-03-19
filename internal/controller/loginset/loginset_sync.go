@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
@@ -42,6 +43,8 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 	controller := &slinkyv1beta1.Controller{}
 	controllerKey := client.ObjectKey(loginset.Spec.ControllerRef.NamespacedName())
 	if err := r.Get(ctx, controllerKey, controller); err != nil {
+		msg := fmt.Sprintf("Failed to get Controller (%s): %v", controllerKey, err)
+		r.eventRecorder.Eventf(loginset, nil, corev1.EventTypeWarning, ControllerRefFailedReason, "Sync", msg)
 		return fmt.Errorf("failed to get controller (%s): %w", controllerKey, err)
 	}
 
@@ -53,7 +56,7 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 				if err != nil {
 					return fmt.Errorf("failed to build object: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, loginset, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -66,7 +69,7 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 				if err != nil {
 					return fmt.Errorf("failed to build object: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, loginset, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -79,7 +82,7 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 				if err != nil {
 					return fmt.Errorf("failed to build object: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, loginset, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -92,7 +95,7 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 				if err != nil {
 					return fmt.Errorf("failed to build: %w", err)
 				}
-				if err := objectutils.SyncObject(r.Client, ctx, object, true); err != nil {
+				if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, loginset, object, true); err != nil {
 					return fmt.Errorf("failed to sync object (%s): %w", klog.KObj(object), err)
 				}
 				return nil
@@ -102,13 +105,15 @@ func (r *LoginSetReconciler) Sync(ctx context.Context, req reconcile.Request) er
 
 	for _, s := range syncSteps {
 		if err := s.Sync(ctx, loginset); err != nil {
-			e := fmt.Errorf("[%s]: %w", s.Name, err)
-			errors := []error{e}
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(loginset, nil, corev1.EventTypeWarning, SyncFailedReason, "Sync", msg)
+			e := fmt.Errorf("failed %q step: %w", s.Name, err)
+			errs := []error{e}
 			if err := r.syncStatus(ctx, loginset); err != nil {
-				e := fmt.Errorf("[%s]: %w", s.Name, err)
-				errors = append(errors, e)
+				e := fmt.Errorf("failed status sync: %w", err)
+				errs = append(errs, e)
 			}
-			return utilerrors.NewAggregate(errors)
+			return utilerrors.NewAggregate(errs)
 		}
 	}
 
