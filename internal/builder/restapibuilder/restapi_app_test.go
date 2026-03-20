@@ -112,3 +112,69 @@ func TestBuilder_BuildRestapi(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkBuilder_BuildRestapi(b *testing.B) {
+	type fields struct {
+		client client.Client
+	}
+	type args struct {
+		restapi *slinkyv1beta1.RestApi
+	}
+	benchmarks := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "default",
+			fields: fields{
+				client: fake.NewClientBuilder().
+					WithObjects(&slinkyv1beta1.Controller{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "slurm",
+						},
+					}).
+					Build(),
+			},
+			args: args{
+				restapi: &slinkyv1beta1.RestApi{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "slurm",
+					},
+					Spec: slinkyv1beta1.RestApiSpec{
+						ControllerRef: corev1.LocalObjectReference{
+							Name: "slurm",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "failure",
+			fields: fields{
+				client: fake.NewFakeClient(),
+			},
+			args: args{
+				restapi: &slinkyv1beta1.RestApi{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "slurm",
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			client := New(bb.fields.client)
+			for b.Loop() {
+				_, err := client.BuildRestapi(bb.args.restapi)
+				if (err != nil) != bb.wantErr {
+					b.Errorf("Builder.BuildRestapi() error = %v, wantErr %v", err, bb.wantErr)
+					return
+				}
+			}
+		})
+	}
+}

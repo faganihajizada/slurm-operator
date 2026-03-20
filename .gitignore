@@ -27,6 +27,12 @@ build-docs/*
 *.out
 cover.html
 
+# Output of go tool pprof
+cpu.prof
+
+# CPU flamegraphs
+cpu.svg
+
 # Dependency directories (remove the comment below to include it)
 !vendor/**/zz_generated.*
 
