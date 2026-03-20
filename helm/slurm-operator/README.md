@@ -58,6 +58,8 @@ Kubernetes: `>= 1.29.0-0`
 | operator.pdb.maxUnavailable | string | `nil` | Maximum pods that may be unavailable (int or quoted percent). Rendered only when set, and takes precedence over `minAvailable`. |
 | operator.pdb.minAvailable | int | `1` | Minimum pods that must remain available after eviction (int or quoted percent). |
 | operator.podSecurityContext | object | `{}` | Pod-level security context for the operator pod. Applied to all containers in the pod. Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/ |
+| operator.profile | bool | `false` | Enable Go profiling for slurm-operator |
+| operator.profileAddr | string | `"localhost:6060"` | Set the port used for exposing Go profiling metrics. This should never be exposed on a public network. |
 | operator.replicas | int | `1` | Set the number of replicas to deploy. |
 | operator.resources | object | `{}` | The container resource limits and requests. Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container |
 | operator.restapiWorkers | int | `4` | Set the max concurrent workers for the Restapi controller. |

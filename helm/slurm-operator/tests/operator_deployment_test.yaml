@@ -94,6 +94,20 @@ tests:
       - equal:
           path: spec.replicas
           value: 42
+  - it: should render profile flag without a positional bool argument
+    set:
+      operator:
+        profile: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[20]
+          value: --profile
+      - equal:
+          path: spec.template.spec.containers[0].args[21]
+          value: --profile-addr
+      - equal:
+          path: spec.template.spec.containers[0].args[23]
+          value: --leader-elect
   - it: should set namespace
     set:
       namespaceOverride: custom-namespace

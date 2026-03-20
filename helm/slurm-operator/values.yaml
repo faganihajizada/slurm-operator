@@ -116,6 +116,11 @@ operator:
   healthPort: 8081
   # -- Set the port used by the metrics server. Value of "0" will disable it.
   metricsPort: 8080
+  # -- Enable Go profiling for slurm-operator
+  profile: false
+  # -- Set the port used for exposing Go profiling metrics.
+  # This should never be exposed on a public network.
+  profileAddr: localhost:6060
   # -- Enable leader election for slurm-operator
   leaderElection: true
   # -- Comma-separated list of namespaces the operator will watch.
