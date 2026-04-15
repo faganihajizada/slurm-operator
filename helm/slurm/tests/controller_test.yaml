@@ -149,6 +149,69 @@ tests:
       - equal:
           path: spec.template.spec.priorityClassName
           value: foo-priorityclass
+  - it: should set extraConf from raw string
+    set:
+      controller:
+        extraConf: |
+          DebugFlags=Backfill
+          SchedulerParameters=permit_job_expansion
+    asserts:
+      - matchRegex:
+          path: spec.extraConf
+          pattern: DebugFlags=Backfill
+      - matchRegex:
+          path: spec.extraConf
+          pattern: SchedulerParameters=permit_job_expansion
+  - it: should set extraConf from extraConfMap
+    set:
+      controller:
+        extraConfMap:
+          MinJobAge: 2
+          SlurmctldDebug: debug2
+    asserts:
+      - exists:
+          path: spec.extraConf
+      - matchRegex:
+          path: spec.extraConf
+          pattern: MinJobAge=2
+      - matchRegex:
+          path: spec.extraConf
+          pattern: SlurmctldDebug=debug2
+  - it: should set extraConf from extraConfMap with list values
+    set:
+      controller:
+        extraConfMap:
+          DebugFlags:
+            - Backfill
+            - Gang
+          SlurmSchedLogLevel: 1
+    asserts:
+      - exists:
+          path: spec.extraConf
+      - matchRegex:
+          path: spec.extraConf
+          pattern: "DebugFlags=Backfill,Gang"
+      - matchRegex:
+          path: spec.extraConf
+          pattern: SlurmSchedLogLevel=1
+  - it: should prefer extraConf over extraConfMap when both are set
+    set:
+      controller:
+        extraConf: |
+          DebugFlags=Backfill
+        extraConfMap:
+          MinJobAge: 2
+          SlurmctldDebug: debug2
+    asserts:
+      - matchRegex:
+          path: spec.extraConf
+          pattern: DebugFlags=Backfill
+      - notMatchRegex:
+          path: spec.extraConf
+          pattern: MinJobAge
+      - notMatchRegex:
+          path: spec.extraConf
+          pattern: SlurmctldDebug
   - it: should set slurmctld livenessProbe exec
     set:
       controller:
