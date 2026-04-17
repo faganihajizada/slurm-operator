@@ -331,17 +331,52 @@ spec:
                           Defaults to 25%.
                         x-kubernetes-int-or-string: true
                     type: object
+                  scheduledUpdate:
+                    description: |-
+                      scheduledUpdate describes the schedule on which NodeSet pods are
+                      to be updated.
+                    properties:
+                      duration:
+                        default: 30m
+                        description: |-
+                          The duration for which NodeSet updates should be conducted.
+                          Ref: https://pkg.go.dev/time#ParseDuration
+                          Ref: https://slurm.schedmd.com/scontrol.html#OPT_Duration
+                        type: string
+                      flags:
+                        description: |-
+                          List of additional flags to append to the Slurm reservation managed by the operator
+                          to coordinate scheduled pod updates.
+                          Ref: https://slurm.schedmd.com/scontrol.html#OPT_Flags
+                        items:
+                          type: string
+                        nullable: true
+                        type: array
+                      startTime:
+                        description: |-
+                          An RFC3339 timestamp at which to begin NodeSet updates.
+                          Ref: https://datatracker.ietf.org/doc/html/rfc3339#section-5.8
+                          Ref: https://slurm.schedmd.com/scontrol.html#OPT_StartTime_1
+                        format: date-time
+                        type: string
+                    type: object
                   type:
                     default: RollingUpdate
                     description: |-
                       Type indicates the type of the NodeSetUpdateStrategy.
-                      One of: RollingUpdate; OnDelete.
+                      One of: RollingUpdate; OnDelete; ScheduledUpdate.
                       Default is RollingUpdate.
                     enum:
                     - RollingUpdate
                     - OnDelete
+                    - ScheduledUpdate
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: scheduledUpdate.startTime and scheduledUpdate.duration
+                    are required when type is ScheduledUpdate
+                  rule: self.type != 'ScheduledUpdate' || (has(self.scheduledUpdate.startTime)
+                    && has(self.scheduledUpdate.duration))
               volumeClaimTemplates:
                 description: |-
                   volumeClaimTemplates is a list of claims that pods are allowed to reference.

@@ -769,13 +769,24 @@ nodesetDefaults:
   # Update strategy configuration.
   # Ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
   updateStrategy:
-    # -- The strategy type. Can be one of: RollingUpdate; OnDelete.
+    # -- The strategy type. Can be one of: RollingUpdate; OnDelete, ScheduledUpdate.
     type: RollingUpdate
     # The RollingUpdate configuration. Ignored unless `type=RollingUpdate`.
     rollingUpdate:
       # -- Maximum number of pods that can be unavailable during update.
       # Can be an absolute number (ex: 5) or a percentage (ex: 25%).
       maxUnavailable: 25%
+    # The ScheduledUpdate configuration. Ignored unless `type=ScheduledUpdate`.
+    scheduledUpdate: {}
+      # -- Start timestamp (RFC3339) for NodeSet updates.
+      # Ref: https://datatracker.ietf.org/doc/html/rfc3339#section-5.8
+      # Ref: https://slurm.schedmd.com/scontrol.html#OPT_StartTime_1
+      # startTime: "YYYY-MM-DDTHH:MM:SSZ"
+      # -- Duration of NodeSet updates
+      # duration: 30m
+      # -- Flags for the NodeSet's maintenance reservation
+      # Ref: https://slurm.schedmd.com/scontrol.html#OPT_Flags
+      # flags: []
   # -- Labels and annotations.
   # Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
   metadata: {}

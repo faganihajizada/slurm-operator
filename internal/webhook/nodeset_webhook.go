@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
@@ -87,6 +89,13 @@ func (r *NodeSetWebhook) validateNodeSet(nodeset *slinkyv1beta1.NodeSet) (admiss
 			if mu.StrVal == "0%" {
 				errs = append(errs, errors.New("maxUnavailable must not be 0%"))
 			}
+		}
+	}
+
+	zeroDuration := metav1.Duration{}
+	if duration := nodeset.Spec.UpdateStrategy.ScheduledUpdate.Duration; duration != zeroDuration {
+		if duration.Duration < time.Minute {
+			errs = append(errs, errors.New("UpdateStrategy.ScheduledUpdate.Duration must be at least 1 minute"))
 		}
 	}
 

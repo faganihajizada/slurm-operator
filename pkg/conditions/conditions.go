@@ -9,26 +9,32 @@ import (
 )
 
 const (
-	StatePrefix = "SlurmNodeState"
+	PodStatePrefix     = "SlurmNodeState"
+	NodeSetStatePrefix = "NodeSetState"
 
 	// Slurm Base States
-	PodConditionAllocated corev1.PodConditionType = StatePrefix + "Allocated"
-	PodConditionDown      corev1.PodConditionType = StatePrefix + "Down"
-	PodConditionError     corev1.PodConditionType = StatePrefix + "Error"
-	PodConditionFuture    corev1.PodConditionType = StatePrefix + "Future"
-	PodConditionIdle      corev1.PodConditionType = StatePrefix + "Idle"
-	PodConditionMixed     corev1.PodConditionType = StatePrefix + "Mixed"
-	PodConditionUnknown   corev1.PodConditionType = StatePrefix + "Unknown"
+	PodConditionAllocated corev1.PodConditionType = PodStatePrefix + "Allocated"
+	PodConditionDown      corev1.PodConditionType = PodStatePrefix + "Down"
+	PodConditionError     corev1.PodConditionType = PodStatePrefix + "Error"
+	PodConditionFuture    corev1.PodConditionType = PodStatePrefix + "Future"
+	PodConditionIdle      corev1.PodConditionType = PodStatePrefix + "Idle"
+	PodConditionMixed     corev1.PodConditionType = PodStatePrefix + "Mixed"
+	PodConditionUnknown   corev1.PodConditionType = PodStatePrefix + "Unknown"
 
 	// Slurm Flag States
-	PodConditionCompleting    corev1.PodConditionType = StatePrefix + "Completing"
-	PodConditionDrain         corev1.PodConditionType = StatePrefix + "Drain"
-	PodConditionFail          corev1.PodConditionType = StatePrefix + "Fail"
-	PodConditionInvalid       corev1.PodConditionType = StatePrefix + "Invalid"
-	PodConditionInvalidReg    corev1.PodConditionType = StatePrefix + "InvalidReg"
-	PodConditionMaintenance   corev1.PodConditionType = StatePrefix + "Maintenance"
-	PodConditionNotResponding corev1.PodConditionType = StatePrefix + "NotResponding"
-	PodConditionUndrain       corev1.PodConditionType = StatePrefix + "Undrain"
+	PodConditionCompleting    corev1.PodConditionType = PodStatePrefix + "Completing"
+	PodConditionDrain         corev1.PodConditionType = PodStatePrefix + "Drain"
+	PodConditionFail          corev1.PodConditionType = PodStatePrefix + "Fail"
+	PodConditionInvalid       corev1.PodConditionType = PodStatePrefix + "Invalid"
+	PodConditionInvalidReg    corev1.PodConditionType = PodStatePrefix + "InvalidReg"
+	PodConditionMaintenance   corev1.PodConditionType = PodStatePrefix + "Maintenance"
+	PodConditionNotResponding corev1.PodConditionType = PodStatePrefix + "NotResponding"
+	PodConditionUndrain       corev1.PodConditionType = PodStatePrefix + "Undrain"
+)
+
+const (
+	// NodeSet Condition Type
+	NodeSetConditionReservationCreated = "ReservationCreated"
 )
 
 func IsConditionTrue(status *corev1.PodStatus, condType corev1.PodConditionType) bool {

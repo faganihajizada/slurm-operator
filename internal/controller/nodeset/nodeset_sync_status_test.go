@@ -8,13 +8,17 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	slurmclient "github.com/SlinkyProject/slurm-client/pkg/client"
+	slurmfake "github.com/SlinkyProject/slurm-client/pkg/client/fake"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/controller/history"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -546,7 +550,6 @@ func TestNodeSetReconciler_calculateReplicaStatus(t *testing.T) {
 		})
 	}
 }
-
 func Test_applySlurmPodConditions(t *testing.T) {
 	idleCondition := corev1.PodCondition{
 		Type:    slurmconditions.PodConditionIdle,
@@ -672,7 +675,7 @@ func Test_applySlurmPodConditions(t *testing.T) {
 func slurmPodConditions(status *corev1.PodStatus) []corev1.PodCondition {
 	var out []corev1.PodCondition
 	for _, c := range status.Conditions {
-		if strings.HasPrefix(string(c.Type), slurmconditions.StatePrefix) {
+		if strings.HasPrefix(string(c.Type), slurmconditions.PodStatePrefix) {
 			out = append(out, c)
 		}
 	}
@@ -682,11 +685,139 @@ func slurmPodConditions(status *corev1.PodStatus) []corev1.PodCondition {
 func nonSlurmPodConditions(status *corev1.PodStatus) []corev1.PodCondition {
 	var out []corev1.PodCondition
 	for _, c := range status.Conditions {
-		if !strings.HasPrefix(string(c.Type), slurmconditions.StatePrefix) {
+		if !strings.HasPrefix(string(c.Type), slurmconditions.PodStatePrefix) {
 			out = append(out, c)
 		}
 	}
 	return out
+}
+
+func TestNodeSetReconciler_calculateReservationCondition(t *testing.T) {
+	currentTime := metav1.Time{Time: time.Now()}
+
+	tests := []struct {
+		name        string
+		nodeset     *slinkyv1beta1.NodeSet
+		want        *metav1.Condition
+		wantErr     bool
+		client      client.Client
+		slurmclient slurmclient.Client
+	}{
+		{
+			name: "NodeSet not scheduled",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.RollingUpdateNodeSetStrategyType,
+					},
+				},
+			},
+			want:        nil,
+			wantErr:     false,
+			client:      fake.NewFakeClient(),
+			slurmclient: slurmfake.NewFakeClient(),
+		},
+		{
+			name: "NodeSet is scheduled and res does not exist in Slurm - condition is not added",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: currentTime,
+							Duration:  metav1.Duration{Duration: time.Duration(1 * time.Minute)},
+						},
+					},
+				},
+			},
+			want:        nil,
+			wantErr:     false,
+			client:      fake.NewFakeClient(),
+			slurmclient: slurmfake.NewFakeClient(),
+		},
+		{
+			name: "NodeSet is scheduled and res does not exist in Slurm - condition is not removed",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: currentTime,
+							Duration:  metav1.Duration{Duration: time.Duration(1 * time.Minute)},
+						},
+					},
+				},
+				Status: slinkyv1beta1.NodeSetStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               slurmconditions.NodeSetConditionReservationCreated,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: currentTime,
+							ObservedGeneration: 1,
+							Reason:             "Created",
+						},
+					},
+				},
+			},
+			want: &metav1.Condition{
+				Type:               slurmconditions.NodeSetConditionReservationCreated,
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: currentTime,
+				ObservedGeneration: 2,
+				Reason:             "NotExists",
+			},
+			wantErr:     false,
+			client:      fake.NewFakeClient(),
+			slurmclient: slurmfake.NewFakeClient(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			r := newNodeSetController(tt.client, nil)
+			r.slurmControl = slurmcontrol.NewSlurmControl(newSlurmClientMap(tt.nodeset.Spec.ControllerRef.Name, tt.slurmclient))
+
+			got, err := r.calculateReservationCondition(context.TODO(), tt.nodeset, tt.nodeset.Status.Conditions)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.calculateReservationCondition() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("unexpected status (-want,+got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func newSlurmClientMap(controllerName string, client slurmclient.Client) *clientmap.ClientMap {
+	cm := clientmap.NewClientMap()
+	key := k8stypes.NamespacedName{
+		Namespace: corev1.NamespaceDefault,
+		Name:      controllerName,
+	}
+	cm.Add(key, client)
+	return cm
 }
 
 func TestNodeSetReconciler_updateNodeSetPodConditions(t *testing.T) {
@@ -898,7 +1029,7 @@ func TestNodeSetReconciler_updateNodeSetPodConditions(t *testing.T) {
 				}
 				var slurmCondCount int
 				for _, condition := range pod.Status.Conditions {
-					if strings.HasPrefix(string(condition.Type), slurmconditions.StatePrefix) {
+					if strings.HasPrefix(string(condition.Type), slurmconditions.PodStatePrefix) {
 						slurmCondCount++
 						var found bool
 						for _, nodeCondition := range ns {

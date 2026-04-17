@@ -220,6 +220,162 @@ func extractSlurmdPreStopReason(pod *corev1.Pod) string {
 	return ""
 }
 
+func TestNodeSetReconciler_syncReservationFinalizer(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: corev1.NamespaceDefault,
+			Name:      "slurm",
+		},
+	}
+	ctx := context.Background()
+	nonZeroReservation := &slurmtypes.V0044ReservationInfo{}
+
+	// Configure times for testing
+	now, err := time.Parse(time.RFC3339, "2026-03-04T00:00:00Z")
+	if err != nil {
+		t.Errorf("Failed to initialize test. Failed to parse time: %v", err)
+	}
+	startTime := now.Unix()
+	endTime := now.Add(time.Hour).Unix()
+
+	nodeList := &slurmtypes.V0044NodeList{}
+	reservationList := &slurmtypes.V0044ReservationInfoList{
+		Items: []slurmtypes.V0044ReservationInfo{
+			{
+				V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-foo"),
+					StartTime: &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(startTime), Set: ptr.To(true)},
+					EndTime:   &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(endTime), Set: ptr.To(true)},
+				},
+			},
+		},
+	}
+	sclient := newFakeClientList(sinterceptor.Funcs{}, nodeList)
+	clientMap := newClientMap(controller.Name, sclient)
+
+	sclientWithRes := newFakeClientList(sinterceptor.Funcs{}, nodeList, reservationList)
+	clientMapWithRes := newClientMap(controller.Name, sclientWithRes)
+
+	type fields struct {
+		slurmControl slurmcontrol.SlurmControlInterface
+	}
+	type args struct {
+		nodeset    *slinkyv1beta1.NodeSet
+		controller *slinkyv1beta1.Controller
+		getRes     *slurmtypes.V0044ReservationInfo
+	}
+	tests := []struct {
+		name           string
+		fields         fields
+		args           args
+		wantErr        bool
+		wantFinalizers []string
+	}{
+		{
+			name: "controller not found removes reservation finalizer",
+			fields: fields{
+				slurmControl: slurmcontrol.NewSlurmControl(clientMap),
+			},
+			args: args{
+
+				nodeset: func() *slinkyv1beta1.NodeSet {
+					ns := newNodeSet("foo", controller.Name, 2)
+					ns.Spec.UpdateStrategy.Type = slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+					ns.Finalizers = []string{slinkyv1beta1.FinalizerNodeSetReservation, "other.finalizer/test"}
+					return ns
+				}(),
+			},
+			wantErr:        false,
+			wantFinalizers: []string{"other.finalizer/test"},
+		},
+		{
+			name: "GetReservationForNodeSet error",
+			fields: fields{
+				slurmControl: slurmcontrol.NewSlurmControl(clientMap),
+			},
+			args: args{
+				nodeset: func() *slinkyv1beta1.NodeSet {
+					ns := newNodeSet("foo", controller.Name, 2)
+					ns.Spec.UpdateStrategy.Type = slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+					return ns
+				}(),
+				controller: controller,
+				getRes:     nonZeroReservation,
+			},
+			wantErr: false,
+		},
+		{
+			name: "no reservation removes reservation finalizer",
+			fields: fields{
+				slurmControl: slurmcontrol.NewSlurmControl(clientMap),
+			},
+			args: args{
+				nodeset: func() *slinkyv1beta1.NodeSet {
+					ns := newNodeSet("foo", controller.Name, 2)
+					ns.Finalizers = []string{slinkyv1beta1.FinalizerNodeSetReservation}
+					return ns
+				}(),
+				controller: controller,
+			},
+			wantErr:        false,
+			wantFinalizers: nil,
+		},
+		{
+			name: "deleting with reservation removes finalizer",
+			fields: fields{
+				slurmControl: slurmcontrol.NewSlurmControl(clientMapWithRes),
+			},
+			args: args{
+				nodeset: func() *slinkyv1beta1.NodeSet {
+					ns := newNodeSet("foo", controller.Name, 2)
+					ns.Finalizers = []string{slinkyv1beta1.FinalizerNodeSetReservation}
+					now := metav1.Now()
+					ns.DeletionTimestamp = &now
+					return ns
+				}(),
+				controller: controller,
+			},
+			wantErr:        false,
+			wantFinalizers: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var client client.Client
+
+			switch {
+			case tt.args.controller != nil && tt.args.nodeset != nil:
+				client = fake.NewFakeClient(tt.args.controller.DeepCopy(), tt.args.nodeset.DeepCopy())
+			case tt.args.controller != nil && tt.args.nodeset == nil:
+				client = fake.NewFakeClient(tt.args.controller.DeepCopy())
+			case tt.args.controller == nil && tt.args.nodeset != nil:
+				client = fake.NewFakeClient(tt.args.nodeset.DeepCopy())
+			default:
+				client = fake.NewFakeClient()
+			}
+
+			r := newNodeSetController(client, nil)
+			r.slurmControl = tt.fields.slurmControl
+			err := r.syncReservationFinalizer(ctx, tt.args.nodeset)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TestNodeSetReconciler_syncReservationFinalizer() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			gotFinalizers := slices.Clone(tt.args.nodeset.Finalizers)
+			slices.Sort(gotFinalizers)
+			want := slices.Clone(tt.wantFinalizers)
+			slices.Sort(want)
+			if diff := cmp.Diff(want, gotFinalizers); diff != "" {
+				t.Errorf("finalizers mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestNodeSetReconciler_adoptOrphanRevisions(t *testing.T) {
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2544,6 +2700,60 @@ func TestNodeSetReconciler_syncUpdate(t *testing.T) {
 				wantErr: false,
 			}
 		}(),
+		func() testCaseFields {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+			startTime := time.Now()
+			endTime := startTime.Add(time.Hour)
+			nodeset.Spec.UpdateStrategy.ScheduledUpdate = slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+				StartTime: metav1.Time{Time: startTime},
+			}
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
+			slurmNodeList := &slurmtypes.V0044NodeList{
+				Items: []slurmtypes.V0044Node{
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod1)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod2)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+				},
+			}
+			slurmReservationList := &slurmtypes.V0044ReservationInfoList{
+				Items: []slurmtypes.V0044ReservationInfo{
+					{
+						V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+							Name:      ptr.To("SlurmOperatorMaint-foo"),
+							StartTime: &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(startTime.Unix()), Set: ptr.To(true)},
+							EndTime:   &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(endTime.Unix()), Set: ptr.To(true)},
+						},
+					},
+				},
+			}
+			slurmClient := newFakeClientList(sinterceptor.Funcs{}, slurmNodeList, slurmReservationList)
+			return testCaseFields{
+				name: "ScheduledUpdate",
+				fields: fields{
+					Client:    k8sclient,
+					ClientMap: newClientMap(controller.Name, slurmClient),
+				},
+				args: args{
+					ctx:     context.TODO(),
+					nodeset: nodeset,
+					pods:    []*corev1.Pod{pod1, pod2},
+					hash:    hash,
+				},
+				wantErr: false,
+			}
+		}(),
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2707,6 +2917,203 @@ func TestNodeSetReconciler_syncRollingUpdate(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
 			if err := r.syncRollingUpdate(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
 				t.Errorf("NodeSetReconciler.syncRollingUpdate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNodeSetReconciler_syncScheduledUpdate(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "slurm",
+		},
+	}
+	const hash = "12345"
+	type fields struct {
+		Client    client.Client
+		ClientMap *clientmap.ClientMap
+	}
+	type args struct {
+		ctx     context.Context
+		nodeset *slinkyv1beta1.NodeSet
+		pods    []*corev1.Pod
+		hash    string
+	}
+	type testCaseFields struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}
+	tests := []testCaseFields{
+		func() testCaseFields {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+			startTime := time.Now()
+			endTime := startTime.Add(time.Hour)
+			nodeset.Spec.UpdateStrategy.ScheduledUpdate = slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+				StartTime: metav1.Time{Time: startTime},
+			}
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			makePodHealthy(pod1)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			makePodHealthy(pod2)
+			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
+			slurmNodeList := &slurmtypes.V0044NodeList{
+				Items: []slurmtypes.V0044Node{
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod1)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod2)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+				},
+			}
+			slurmReservationList := &slurmtypes.V0044ReservationInfoList{
+				Items: []slurmtypes.V0044ReservationInfo{
+					{
+						V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+							Name:      ptr.To("SlurmOperatorMaint-foo"),
+							StartTime: &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(startTime.Unix()), Set: ptr.To(true)},
+							EndTime:   &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(endTime.Unix()), Set: ptr.To(true)},
+						},
+					},
+				},
+			}
+			slurmClient := newFakeClientList(sinterceptor.Funcs{}, slurmNodeList, slurmReservationList)
+			return testCaseFields{
+				name: "update",
+				fields: fields{
+					Client:    k8sclient,
+					ClientMap: newClientMap(controller.Name, slurmClient),
+				},
+				args: args{
+					ctx:     context.TODO(),
+					nodeset: nodeset,
+					pods:    []*corev1.Pod{pod1, pod2},
+					hash:    hash,
+				},
+				wantErr: false,
+			}
+		}(),
+		func() testCaseFields {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
+			startTime := time.Now()
+			endTime := startTime.Add(time.Hour)
+			nodeset.Spec.UpdateStrategy.ScheduledUpdate = slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+				StartTime: metav1.Time{Time: startTime},
+			}
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, hash)
+			makePodHealthy(pod1)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, hash)
+			makePodHealthy(pod2)
+			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
+			slurmNodeList := &slurmtypes.V0044NodeList{
+				Items: []slurmtypes.V0044Node{
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod1)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod2)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+				},
+			}
+			slurmReservationList := &slurmtypes.V0044ReservationInfoList{
+				Items: []slurmtypes.V0044ReservationInfo{
+					{
+						V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+							Name:      ptr.To("SlurmOperatorMaint-foo"),
+							StartTime: &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(startTime.Unix()), Set: ptr.To(true)},
+							EndTime:   &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(endTime.Unix()), Set: ptr.To(true)},
+						},
+					},
+				},
+			}
+			slurmClient := newFakeClientList(sinterceptor.Funcs{}, slurmNodeList, slurmReservationList)
+			return testCaseFields{
+				name: "no update",
+				fields: fields{
+					Client:    k8sclient,
+					ClientMap: newClientMap(controller.Name, slurmClient),
+				},
+				args: args{
+					ctx:     context.TODO(),
+					nodeset: nodeset,
+					pods:    []*corev1.Pod{pod1, pod2},
+					hash:    hash,
+				},
+				wantErr: false,
+			}
+		}(),
+		func() testCaseFields {
+			nodeset := newNodeSet("foo", controller.Name, 2)
+			nodeset.Spec.UpdateStrategy.Type = slinkyv1beta1.RollingUpdateNodeSetStrategyType
+			startTime := time.Now()
+			endTime := startTime.Add(time.Hour)
+
+			nodeset.Spec.UpdateStrategy.ScheduledUpdate = slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+				StartTime: metav1.Time{Time: startTime},
+			}
+			pod1 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
+			makePodHealthy(pod1)
+			pod2 := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 1, "")
+			k8sclient := fake.NewFakeClient(nodeset, pod1, pod2)
+			slurmNodeList := &slurmtypes.V0044NodeList{
+				Items: []slurmtypes.V0044Node{
+					{
+						V0044Node: slurmapi.V0044Node{
+							Name:  ptr.To(nodesetutils.GetSlurmNodeName(pod1)),
+							State: ptr.To([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
+						},
+					},
+				},
+			}
+			slurmReservationList := &slurmtypes.V0044ReservationInfoList{
+				Items: []slurmtypes.V0044ReservationInfo{
+					{
+						V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+							Name:      ptr.To("SlurmOperatorMaint-foo"),
+							StartTime: &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(startTime.Unix()), Set: ptr.To(true)},
+							EndTime:   &slurmapi.V0044Uint64NoValStruct{Number: ptr.To(endTime.Unix()), Set: ptr.To(true)},
+						},
+					},
+				},
+			}
+			slurmClient := newFakeClientList(sinterceptor.Funcs{}, slurmNodeList, slurmReservationList)
+			return testCaseFields{
+				name: "update, with unhealthy",
+				fields: fields{
+					Client:    k8sclient,
+					ClientMap: newClientMap(controller.Name, slurmClient),
+				},
+				args: args{
+					ctx:     context.TODO(),
+					nodeset: nodeset,
+					pods:    []*corev1.Pod{pod1, pod2},
+					hash:    hash,
+				},
+				wantErr: false,
+			}
+		}(),
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
+			if err := r.syncScheduledUpdate(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
+				t.Errorf("NodeSetReconciler.syncScheduledUpdate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

@@ -6,6 +6,7 @@ package nodeset
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/set"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -39,6 +41,7 @@ import (
 	"github.com/SlinkyProject/slurm-operator/internal/utils/objectutils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/podcontrol"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/podutils"
+
 	"github.com/SlinkyProject/slurm-operator/internal/utils/structutils"
 )
 
@@ -69,6 +72,10 @@ func (r *NodeSetReconciler) Sync(ctx context.Context, req reconcile.Request) err
 	nodeset = nodeset.DeepCopy()
 	defaults.SetNodeSetDefaults(nodeset)
 	key := objectutils.KeyFunc(nodeset)
+
+	if err := r.syncFinalizers(ctx, nodeset); err != nil {
+		return err
+	}
 
 	if !nodeset.DeletionTimestamp.IsZero() {
 		logger.Info("NodeSet is being deleted, skipping sync", "request", req)
@@ -116,6 +123,117 @@ func (r *NodeSetReconciler) Sync(ctx context.Context, req reconcile.Request) err
 	}
 
 	return r.syncStatus(ctx, nodeset, nodesetPods, currentRevision, updateRevision, collisionCount, hash)
+}
+
+type SyncFinalizer struct {
+	Name string
+	Sync func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error
+}
+
+// syncFinalizers implements control logic for synchronizing a NodeSet's finalizers
+func (r *NodeSetReconciler) syncFinalizers(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+	syncSteps := []SyncFinalizer{
+		{
+			Name: "Reservation",
+			Sync: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+				return r.syncReservationFinalizer(ctx, nodeset)
+			},
+		},
+	}
+
+	for _, s := range syncSteps {
+		if err := s.Sync(ctx, nodeset); err != nil {
+			msg := fmt.Sprintf("Failed %q step: %v", s.Name, err)
+			r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, SyncFinalizerFailedReason, "SyncFinalizer", msg)
+			return fmt.Errorf("failed %q step: %w", s.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func (r *NodeSetReconciler) syncReservationFinalizer(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+	// If the controller does not exist we cannot determine reservation status and must
+	// remove the finalizer in order to permit NodeSet cleanup
+	controller := new(slinkyv1beta1.Controller)
+	key := client.ObjectKey{
+		Name:      nodeset.Spec.ControllerRef.Name,
+		Namespace: nodeset.Namespace,
+	}
+	if err := r.Get(ctx, key, controller); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+		return r.removeReservationFinalizerIfNeeded(ctx, nodeset)
+	}
+
+	// Attempt to Get the reservation. If we cannot, assume it is deleted and remove the finalizer
+	reservationExists, err := r.slurmControl.CheckReservationForNodeSet(ctx, nodeset)
+	if err != nil {
+		return err
+	}
+	if !reservationExists {
+		return r.removeReservationFinalizerIfNeeded(ctx, nodeset)
+	}
+
+	// If the reservation exists and the NodeSet is being deleted, delete the reservation, then remove the finalizer
+	if reservationExists && !nodeset.DeletionTimestamp.IsZero() {
+		if err := r.slurmControl.DeleteReservationForNodeSet(ctx, nodeset); err != nil {
+			return err
+		}
+		if err := r.removeReservationFinalizerIfNeeded(ctx, nodeset); err != nil {
+			return err
+		}
+		return nil
+	}
+	return nil
+}
+
+func (r *NodeSetReconciler) addReservationFinalizerIfNeeded(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+	if controllerutil.ContainsFinalizer(nodeset, slinkyv1beta1.FinalizerNodeSetReservation) {
+		return nil
+	}
+
+	finalizersToAdd := slices.Concat(nodeset.Finalizers, []string{slinkyv1beta1.FinalizerNodeSetReservation})
+	if err := r.updateNodeSetFinalizers(ctx, nodeset, finalizersToAdd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *NodeSetReconciler) removeReservationFinalizerIfNeeded(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+	if !controllerutil.ContainsFinalizer(nodeset, slinkyv1beta1.FinalizerNodeSetReservation) {
+		return nil
+	}
+
+	currentFinalizers := set.New(nodeset.Finalizers...)
+
+	finalizersToRemove := set.New(slinkyv1beta1.FinalizerNodeSetReservation)
+	finalizersToKeep := currentFinalizers.Difference(finalizersToRemove).SortedList()
+
+	if err := r.updateNodeSetFinalizers(ctx, nodeset, finalizersToKeep); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *NodeSetReconciler) updateNodeSetFinalizers(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, newFinalizers []string) error {
+	logger := log.FromContext(ctx)
+
+	logger.V(1).Info("Pending NodeSet Finalizer update", "newFinalizers", newFinalizers)
+
+	mutateFn := func(nodeset *slinkyv1beta1.NodeSet) error {
+		nodeset.Finalizers = newFinalizers
+		return nil
+	}
+
+	if err := objectutils.PatchObject(r.Client, ctx, nodeset, mutateFn); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // adoptOrphanRevisions adopts any orphaned ControllerRevisions that match nodeset's Selector. If all adoptions are
@@ -297,6 +415,12 @@ func (r *NodeSetReconciler) sync(
 			Name: "SlurmTopology",
 			SyncFn: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
 				return r.syncSlurmTopology(ctx, nodeset, pods)
+			},
+		},
+		{
+			Name: "SlurmReservation",
+			SyncFn: func(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+				return r.syncSlurmReservation(ctx, nodeset, pods)
 			},
 		},
 	}
@@ -1429,6 +1553,8 @@ func (r *NodeSetReconciler) syncUpdate(
 		fallthrough
 	case slinkyv1beta1.RollingUpdateNodeSetStrategyType:
 		return r.syncRollingUpdate(ctx, nodeset, pods, hash)
+	case slinkyv1beta1.ScheduledUpdateNodeSetStrategyType:
+		return r.syncScheduledUpdate(ctx, nodeset, pods, hash)
 	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
 		// r.syncNodeSet() will handled it on the next reconcile
 		return nil
@@ -1511,6 +1637,17 @@ func (r *NodeSetReconciler) splitUpdatePods(
 			"updatePods", len(podsToDelete),
 			"remainingPods", len(remainingPods))
 		return podsToDelete, remainingPods
+	case slinkyv1beta1.ScheduledUpdateNodeSetStrategyType:
+		eligiblePods, err := r.slurmControl.GetPodsUnderReservation(ctx, nodeset, pods)
+		if err != nil {
+			logger.Error(err, "failed to determine pods under reservation", "NodeSet", klog.KObj(nodeset))
+			return nil, nil
+		}
+
+		podsToDelete = append(podsToDelete, eligiblePods...)
+
+		return podsToDelete, nil
+
 	case slinkyv1beta1.OnDeleteNodeSetStrategyType:
 		return nil, nil
 	}
@@ -1579,6 +1716,86 @@ func (r *NodeSetReconciler) syncSshConfig(
 
 	if err := objectutils.SyncObject(r.Client, ctx, r.eventRecorder, nodeset, config, true); err != nil {
 		return fmt.Errorf("failed to sync SSH config (%s): %w", klog.KObj(config), err)
+	}
+
+	return nil
+}
+
+// syncScheduledUpdate will synchronize rolling updates for NodeSet pods
+// based on reservations
+func (r *NodeSetReconciler) syncScheduledUpdate(
+	ctx context.Context,
+	nodeset *slinkyv1beta1.NodeSet,
+	pods []*corev1.Pod,
+	hash string,
+) error {
+	logger := log.FromContext(ctx)
+
+	_, oldPods := findUpdatedPods(pods, hash)
+
+	// Replace all unhealthy pods
+	unhealthyPods, healthyPods := nodesetutils.SplitUnhealthyPods(oldPods)
+	if len(unhealthyPods) > 0 {
+		logger.Info("Delete unhealthy pods for Scheduled Update",
+			"unhealthyPods", len(unhealthyPods))
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, "Scheduled Update", "ScheduledUpdate",
+			"Scheduled update: deleting %d unhealthy old pod(s)", len(unhealthyPods))
+		if err := r.doPodScale(ctx, nodeset, nil, unhealthyPods, nil); err != nil {
+			return err
+		}
+	}
+
+	// If reservation is ongoing, handle updates
+	podsToDelete, _ := r.splitUpdatePods(ctx, nodeset, healthyPods, hash)
+
+	// Handle pod scale-down
+	if len(podsToDelete) > 0 {
+		logger.Info("Scale-in pods for Scheduled Update",
+			"delete", len(podsToDelete))
+		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeNormal, "Scheduled Update", "ScheduledUpdate",
+			"Scheduled update: replacing %d old pod(s) with updated revision", len(podsToDelete))
+		if err := r.doPodScale(ctx, nodeset, nil, podsToDelete, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// syncReservation will synchronize the reservation created for NodeSets using the
+// Scheduled UpdateStrategy
+func (r *NodeSetReconciler) syncSlurmReservation(
+	ctx context.Context,
+	nodeset *slinkyv1beta1.NodeSet,
+	pods []*corev1.Pod,
+) error {
+	nodesetIsScheduled := nodeset.Spec.UpdateStrategy.Type == slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+	nodeSetHasReplicas := ptr.Deref(nodeset.Spec.Replicas, defaults.DefaultNodeSetReplicas) > 0
+	nodeSetHasIdlePods := (nodeset.Status.SlurmAllocated + nodeset.Status.SlurmIdle) > 0
+
+	// Reservation should only be created for NodeSets that are using the Scheduled Update strategy.
+	// Creating the Reservation should be delayed until after the nodeset has a healthy replica count
+	// otherwise NodeSet creation will be blocked due to an early failure of the reconcile loop due to
+	// an error returned here
+	if nodesetIsScheduled && nodeSetHasReplicas && nodeSetHasIdlePods {
+		err := r.addReservationFinalizerIfNeeded(ctx, nodeset)
+		if err != nil {
+			return err
+		}
+
+		err = r.slurmControl.SyncReservationForNodeSet(ctx, nodeset, pods)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Reservations should be removed if the NodeSet UpdateStrategy is not ScheduledUpdate or if there are no NodeSet replicas
+	if !nodesetIsScheduled || !nodeSetHasReplicas {
+		err := r.slurmControl.DeleteReservationForNodeSet(ctx, nodeset)
+		if err != nil {
+			return err
+		}
+		return r.removeReservationFinalizerIfNeeded(ctx, nodeset)
 	}
 
 	return nil

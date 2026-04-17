@@ -188,12 +188,13 @@ type NodeSetSsh struct {
 // NodeSetUpdateStrategy indicates the strategy that the NodeSet
 // controller will be used to perform updates. It includes any additional
 // parameters necessary to perform the update for the indicated strategy.
+// +kubebuilder:validation:XValidation:rule="self.type != 'ScheduledUpdate' || (has(self.scheduledUpdate.startTime) && has(self.scheduledUpdate.duration))", message="scheduledUpdate.startTime and scheduledUpdate.duration are required when type is ScheduledUpdate"
 type NodeSetUpdateStrategy struct {
 	// Type indicates the type of the NodeSetUpdateStrategy.
-	// One of: RollingUpdate; OnDelete.
+	// One of: RollingUpdate; OnDelete; ScheduledUpdate.
 	// Default is RollingUpdate.
 	// +optional
-	// +kubebuilder:validation:Enum=RollingUpdate;OnDelete
+	// +kubebuilder:validation:Enum=RollingUpdate;OnDelete;ScheduledUpdate
 	// +kubebuilder:default:=RollingUpdate
 	Type NodeSetUpdateStrategyType `json:"type,omitempty"`
 
@@ -201,6 +202,11 @@ type NodeSetUpdateStrategy struct {
 	// RollingUpdateNodeSetStrategyType.
 	// +optional
 	RollingUpdate RollingUpdateNodeSetStrategy `json:"rollingUpdate,omitempty"`
+
+	// scheduledUpdate describes the schedule on which NodeSet pods are
+	// to be updated.
+	// +optional
+	ScheduledUpdate ScheduledUpdateNodeSetStrategy `json:"scheduledUpdate,omitempty"`
 }
 
 // PersistentVolumeClaimRetentionPolicyType is a string enumeration of the policies that will determine
@@ -257,6 +263,12 @@ const (
 	// OnDeleteNodeSetStrategyType indicates that NodeSet pods will only be
 	// replaced when the old pod is killed for any reason.
 	OnDeleteNodeSetStrategyType NodeSetUpdateStrategyType = "OnDelete"
+
+	// ScheduledUpdateNodeSetStrategyType indicates that NodeSet pods will only be
+	// replaced when they are reserved with the MAINT flag. Please note
+	// that the reservation used by this type must be specified by the
+	// NodeSet.Partition section.
+	ScheduledUpdateNodeSetStrategyType NodeSetUpdateStrategyType = "ScheduledUpdate"
 )
 
 // RollingUpdateNodeSetStrategy is used to communicate parameters for
@@ -269,6 +281,31 @@ type RollingUpdateNodeSetStrategy struct {
 	// +optional
 	// +kubebuilder:default:="25%"
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+}
+
+// ScheduledUpdateNodeSetStrategy is used to communicate parameters for
+// ScheduledUpdateNodeSetStrategyType. Used to create the corresponding Slurm
+// reservation for the update timeframe
+type ScheduledUpdateNodeSetStrategy struct {
+	// An RFC3339 timestamp at which to begin NodeSet updates.
+	// Ref: https://datatracker.ietf.org/doc/html/rfc3339#section-5.8
+	// Ref: https://slurm.schedmd.com/scontrol.html#OPT_StartTime_1
+	// +optional
+	StartTime metav1.Time `json:"startTime,omitempty"`
+
+	// The duration for which NodeSet updates should be conducted.
+	// Ref: https://pkg.go.dev/time#ParseDuration
+	// Ref: https://slurm.schedmd.com/scontrol.html#OPT_Duration
+	// +optional
+	// +kubebuilder:default:="30m"
+	Duration metav1.Duration `json:"duration,omitempty"`
+
+	// List of additional flags to append to the Slurm reservation managed by the operator
+	// to coordinate scheduled pod updates.
+	// Ref: https://slurm.schedmd.com/scontrol.html#OPT_Flags
+	// +nullable
+	// +optional
+	Flags []string `json:"flags,omitempty"`
 }
 
 // NodeSetPruneNodeRecordType is a string enumeration of how a NodeSet has its
