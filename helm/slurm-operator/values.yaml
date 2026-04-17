@@ -86,14 +86,15 @@ operator:
     # allowPrivilegeEscalation: false
     # capabilities:
       # drop: ["ALL"]
-  # PodDisruptionBudget configuration.
+  # PodDisruptionBudget for the operator Deployment.
   # Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Enable PodDisruptionBudget.
     enabled: false
-    # -- Minimum number of pods that must still be available after eviction.
-    # Can be an absolute number (ex: 5) or a percentage (ex: 25%).
+    # -- Minimum pods that must remain available after eviction (int or quoted percent).
     minAvailable: 1
+    # -- Maximum pods that may be unavailable (int or quoted percent). Rendered only when set, and takes precedence over `minAvailable`.
+    maxUnavailable: null
   # -- Set the max concurrent workers for the Accounting controller.
   accountingWorkers: 4
   # -- Set the max concurrent workers for the Controller controller.
@@ -184,14 +185,15 @@ webhook:
     # allowPrivilegeEscalation: false
     # capabilities:
       # drop: ["ALL"]
-  # PodDisruptionBudget configuration.
+  # PodDisruptionBudget for the webhook Deployment.
   # Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Enable PodDisruptionBudget.
     enabled: false
-    # -- Minimum number of pods that must still be available after eviction.
-    # Can be an absolute number (ex: 5) or a percentage (ex: 25%).
+    # -- Minimum pods that must remain available after eviction (int or quoted percent).
     minAvailable: 1
+    # -- Maximum pods that may be unavailable (int or quoted percent). Rendered only when set, and takes precedence over `minAvailable`.
+    maxUnavailable: null
   # -- Set the log level by string (e.g. error, info, debug) or number (e.g. 1..5).
   logLevel: info
   # -- Set the port used for the webhook server
