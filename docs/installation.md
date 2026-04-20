@@ -358,19 +358,60 @@ NodeSets should request GPUs in accordance with [device plugins][device-plugins]
 or [DRA]. In addition, `extraConf` or `extraConfMap` needs to define a [GRES] in
 accordance with the GPUs it should be allocated to.
 
-The following is an example is of a `gpu-h100` NodeSet which has 8 H100 GPUs.
+The following is an example is of a `gpu-gb200` NodeSet which has 4 GB200 GPUs.
 This example assumes that the [NVIDIA gpu-operator][nvidia-gpu-operator] is
 running on the Kubernetes cluster.
 
 ```yaml
 nodesets:
-  gpu-h100:
+  gpu-gb200:
     slurmd:
       resources:
         limits:
-          nvidia.com/gpu: 8
+          nvidia.com/gpu: 4
     extraConfMap:
-      Gres: ["gpu:h100:8"]
+      Gres: ["gpu:GB200:4"]
+```
+
+Within the NodeSet pod, all GPUs on the underlying host are visible in the
+output of the `nvidia-smi` command:
+
+```bash
+$ kubectl exec -n slurm slurm-controller-0 -- srun bash -c "echo GPU Devices Available on $(hostname):; printf '\n';nvidia-smi"
+GPU Devices Available on validation-k8s-headnode:
+
+Mon Apr 20 17:03:28 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.48.01              Driver Version: 590.48.01      CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GB200                   On  |   00000008:01:00.0 Off |                    0 |
+| N/A   37C    P0            166W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GB200                   On  |   00000009:01:00.0 Off |                    0 |
+| N/A   37C    P0            157W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   2  NVIDIA GB200                   On  |   00000018:01:00.0 Off |                    0 |
+| N/A   36C    P0            150W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   3  NVIDIA GB200                   On  |   00000019:01:00.0 Off |                    0 |
+| N/A   36C    P0            172W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
 ```
 
 <!-- Links -->
