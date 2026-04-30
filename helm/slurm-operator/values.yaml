@@ -64,12 +64,24 @@ operator:
     #   labelSelector:
     #     matchLabels:
     #       app.kubernetes.io/name: slurm-operator
+  # -- Pod-level security context for the operator pod. Applied to all containers in the pod.
+  # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  podSecurityContext: {}
+    # runAsNonRoot: true
+    # seccompProfile:
+      # type: RuntimeDefault
   # -- The container resource limits and requests.
   # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
   resources: {}
     # requests:
     #   cpu: 1
     #   memory: 1Gi
+  # -- Container-level security context for the operator container.
+  # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
+  securityContext: {}
+    # allowPrivilegeEscalation: false
+    # capabilities:
+      # drop: ["ALL"]
   # PodDisruptionBudget configuration.
   # Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
@@ -146,12 +158,24 @@ webhook:
     #   labelSelector:
     #     matchLabels:
     #       app.kubernetes.io/name: slurm-operator-webhook
+  # -- Pod-level security context for the webhook pod. Applied to all containers in the pod.
+  # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  podSecurityContext: {}
+    # runAsNonRoot: true
+    # seccompProfile:
+      # type: RuntimeDefault
   # -- The container resource limits and requests.
   # Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container
   resources: {}
     # requests:
     #   cpu: 1
     #   memory: 1Gi
+  # -- Container-level security context for the webhook container.
+  # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
+  securityContext: {}
+    # allowPrivilegeEscalation: false
+    # capabilities:
+      # drop: ["ALL"]
   # PodDisruptionBudget configuration.
   # Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:

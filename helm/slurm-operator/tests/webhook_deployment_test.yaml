@@ -98,6 +98,32 @@ tests:
       - equal:
           path: metadata.name
           value: custom-name-webhook
+  - it: should set securityContext
+    set:
+      webhook:
+        securityContext:
+          allowPrivilegeEscalation: false
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+  - it: should omit securityContext by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext
+  - it: should set podSecurityContext
+    set:
+      webhook:
+        podSecurityContext:
+          runAsNonRoot: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+  - it: should omit podSecurityContext by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.securityContext
   - it: should set serviceAccount
     set:
       webhook:
