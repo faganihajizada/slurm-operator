@@ -25,7 +25,6 @@ import (
 const (
 	SlurmConfFile  = "slurm.conf"
 	CgroupConfFile = "cgroup.conf"
-	GresConfFile   = "gres.conf"
 )
 
 func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Controller) (*corev1.ConfigMap, error) {
@@ -62,14 +61,10 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 		configFilesList.Items = append(configFilesList.Items, *cm)
 	}
 	hasCgroupConfFile := false
-	hasGresConfFile := false
 	for _, configMap := range configFilesList.Items {
 		if _, ok := configMap.Data[CgroupConfFile]; ok {
 			hasCgroupConfFile = true
 			break
-		}
-		if _, ok := configMap.Data[GresConfFile]; ok {
-			hasGresConfFile = true
 		}
 	}
 
@@ -149,9 +144,6 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 	}
 	if !hasCgroupConfFile {
 		opts.Data[CgroupConfFile] = buildCgroupConf()
-	}
-	if !hasGresConfFile {
-		opts.Data[GresConfFile] = buildGresConf()
 	}
 
 	return b.CommonBuilder.BuildConfigMap(opts, controller)
@@ -352,15 +344,6 @@ func isCgroupEnabled(cgroupConf string) bool {
 	r := regexp.MustCompile(`(?im)^CgroupPlugin=disabled`)
 	found := r.FindStringSubmatch(cgroupConf)
 	return len(found) == 0
-}
-
-// https://slurm.schedmd.com/gres.conf.html
-func buildGresConf() string {
-	conf := config.NewBuilder()
-
-	conf.AddProperty(config.NewProperty("AutoDetect", "nvidia"))
-
-	return conf.Build()
 }
 
 // BuildControllerConfigExternal returns a minimal slurm.conf for slurmrestd (lacks configless).

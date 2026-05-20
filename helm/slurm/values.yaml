@@ -91,7 +91,7 @@ configFiles: {}
   #   ConstrainSwapSpace=yes
   # Ref: https://slurm.schedmd.com/gres.conf.html
   # gres.conf: |
-  #   AutoDetect=nvidia
+  #   AutoDetect=Full
   # Ref: https://slurm.schedmd.com/mpi.conf.html
   # mpi.conf: |
   #   PMIxDebug=0
