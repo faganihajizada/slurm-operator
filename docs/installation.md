@@ -20,6 +20,9 @@
       - [With root Authorized Keys](#with-root-authorized-keys)
       - [Testing Slurm](#testing-slurm)
     - [With GPUs](#with-gpus)
+    - [With IMEX](#with-imex)
+      - [Limitations](#limitations)
+      - [Configuration](#configuration)
 
 <!-- mdformat-toc end -->
 
@@ -358,19 +361,173 @@ NodeSets should request GPUs in accordance with [device plugins][device-plugins]
 or [DRA]. In addition, `extraConf` or `extraConfMap` needs to define a [GRES] in
 accordance with the GPUs it should be allocated to.
 
-The following is an example is of a `gpu-h100` NodeSet which has 8 H100 GPUs.
+The following is an example is of a `gpu-gb200` NodeSet which has 4 GB200 GPUs.
 This example assumes that the [NVIDIA gpu-operator][nvidia-gpu-operator] is
 running on the Kubernetes cluster.
 
 ```yaml
 nodesets:
-  gpu-h100:
+  gpu-gb200:
     slurmd:
       resources:
         limits:
-          nvidia.com/gpu: 8
+          nvidia.com/gpu: 4
     extraConfMap:
-      Gres: ["gpu:h100:8"]
+      Gres: ["gpu:GB200:4"]
+```
+
+Within the NodeSet pod, all GPUs on the underlying host are visible in the
+output of the `nvidia-smi` command:
+
+```bash
+$ kubectl exec -n slurm slurm-controller-0 -- srun bash -c "echo GPU Devices Available on $(hostname):; printf '\n';nvidia-smi"
+GPU Devices Available on validation-k8s-headnode:
+
+Mon Apr 20 17:03:28 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.48.01              Driver Version: 590.48.01      CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GB200                   On  |   00000008:01:00.0 Off |                    0 |
+| N/A   37C    P0            166W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GB200                   On  |   00000009:01:00.0 Off |                    0 |
+| N/A   37C    P0            157W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   2  NVIDIA GB200                   On  |   00000018:01:00.0 Off |                    0 |
+| N/A   36C    P0            150W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   3  NVIDIA GB200                   On  |   00000019:01:00.0 Off |                    0 |
+| N/A   36C    P0            172W / 1200W |       0MiB / 189471MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+### With IMEX
+
+NVIDIA GB200 & GB300 NVL72 systems provide the NVIDIA
+[Internode Memory Exchange/Management Service (IMEX)][imex] service. IMEX
+facilitates shared memory operations across nodes on an NVLink Fabric. IMEX is
+crucial to taking full advantage of the NVL72 rackscale systems.
+
+Slurm-operator supports the use of IMEX channels, in order to provide memory
+isolation within an IMEX domain. To use IMEX on Slurm-operator, the
+[DRA Driver NVIDIA GPU][dra-driver-nvidia-gpu] should be installed in order to
+automate the management and allocation of the IMEX daemons. This can be
+installed using the [NVIDIA GPU Operator][nvidia-gpu-operator].
+
+Historically, baremetal implementations of IMEX domain management with Slurm
+made use of complicated prolog and epilog scripts to standup IMEX channels on
+nodes prior to job launch, and to clean them up after job completion. With
+Slurm-operator, these scripts should not be used, as they may interfere with the
+operations of the [GPU DRA driver][dra-driver-nvidia-gpu].
+
+#### Limitations
+
+As Slurm-operator relies on [DRA] to configure IMEX channels on the underlying
+Kubernetes nodes, Slurm-operator does not support per-job configuration of IMEX
+channels. If this is a hard requirement for a site, the ComputeDomain that is
+claimed by a NodeSet should contain multiple channels, and prolog and epilog
+scripts should be used to limit user access to these channels using Linux
+permissions or mounts.
+
+#### Configuration
+
+Below is a simple ComputeDomain, which injects all channels into the NodeSet's
+`slurmd` pod:
+
+```yaml
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: slurm-compute-domain
+  namespace: slurm
+spec:
+  channel:
+    allocationMode: All
+    resourceClaimTemplate:
+      name: slurm-test-compute-domain
+  numNodes: 0
+```
+
+The [SwitchType] field in [slurm.conf] should be set so that slurmctld can
+identify the type of switch that is being used for application communications.
+In Slinky clusters, this can be set on Controllers using the `spec.extraConf`
+map:
+
+```yaml
+controller:
+  extraConfMap:
+    SwitchType: "switch/nvidia_imex"
+    SwitchParameters: ""
+```
+
+Resource limits and claims for Slinky NodeSets can be specified in the
+`spec.slurmd.resources` field of the CRD or the Slurm Helm chart:
+
+```yaml
+nodesets:
+  slinky:
+    slurmd:
+      resources:
+        limits:
+          nvidia.com/gpu: 4
+        claims:
+          - name: compute-domain-channel
+```
+
+[DRA] ResourceClaims can be specified for Slinky NodeSets in the Helm chart
+values:
+
+```yaml
+nodesets:
+  slinky:
+    podSpec:
+      resourceClaims:
+        - name: compute-domain-channel
+          resourceClaimTemplateName: slurm-test-compute-domain
+```
+
+Once the Slurm chart has been deployed, a ResourceClaim should be created for
+the NodeSet pod:
+
+```bash
+$ kubectl get resourceclaim -n slurm
+NAME                                                     STATE                AGE
+slurm-worker-slinky-jvb8l-compute-domain-channel-4rpsc   allocated,reserved   7m8s
+```
+
+A simple job can be launched to confirm successful creation of the IMEX channels
+on the NodeSet pod:
+
+```bash
+$ kubectl exec -n slurm slurm-controller-0 -- srun bash -c \ "printf '\n\n'; echo === IMEX Channel Test ===; \
+ echo Job \$SLURM_JOB_ID Node \$SLURMD_NODENAME; \
+echo Channel devices:; \
+ls /dev/nvidia-caps-imex-channels/ | grep channel || echo No channels found; \
+ls -la /dev/nvidia-caps-imex-channels/channel* 2>/dev/null || echo No channel devices;"
+
+
+=== IMEX Channel Test ===
+Job 74 Node validation-k8s-gpu-02
+Channel devices:
+channel1
+crw-rw-rw- 1 root root 509, 1 Apr 20 17:08 /dev/nvidia-caps-imex-channels/channel1
 ```
 
 <!-- Links -->
@@ -380,12 +537,16 @@ nodesets:
 [default-storageclass]: https://kubernetes.io/docs/concepts/storage/storage-classes/#default-storageclass
 [device-plugins]: https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#using-device-plugins
 [dra]: https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/
+[dra-driver-nvidia-gpu]: https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu
 [gres]: https://slurm.schedmd.com/gres.html
 [grestypes]: https://slurm.schedmd.com/slurm.conf.html#OPT_GresTypes
+[imex]: https://docs.nvidia.com/multi-node-nvlink-systems/imex-guide/overview.html
 [mariadb-operator]: https://github.com/mariadb-operator/mariadb-operator/blob/main/docs/helm.md
 [mysql-operator]: https://dev.mysql.com/doc/mysql-operator/en/mysql-operator-installation-helm.html
 [nvidia-gpu-operator]: https://github.com/NVIDIA/gpu-operator
 [persistent-volume]: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
 [slurm-commands]: https://slurm.schedmd.com/quickstart.html#commands
+[slurm.conf]: https://slurm.schedmd.com/slurm.conf.html
 [sssd]: https://sssd.io/
 [statesavelocation]: https://slurm.schedmd.com/slurm.conf.html#OPT_StateSaveLocation
+[switchtype]: https://slurm.schedmd.com/slurm.conf.html#OPT_SwitchType
