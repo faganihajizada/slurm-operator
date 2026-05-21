@@ -539,7 +539,6 @@ sssd:
   # Ref: https://man.archlinux.org/man/sssd.conf.5
   conf: |
     [sssd]
-    config_file_version = 2
     services = nss,pam
     domains = DEFAULT
 
@@ -550,8 +549,10 @@ sssd:
     [pam]
 
     [domain/DEFAULT]
-    id_provider = files
-    auth_provider = files
+    id_provider = proxy
+    proxy_lib_name = files
+    auth_provider = proxy
+    proxy_pam_target = sssd-shadowutils
 
 # -- (object) Defines defaults for the LoginSet map values.
 loginsetDefaults:
