@@ -75,7 +75,7 @@ EOR
    `slurmd` image can be built with these changes included:
 
 ```bash
-export VERSION=25.11
+export VERSION=26.05
 export FLAVOR="rockylinux9"
 export BAKE_IMPORTS="--file ./docker-bake.hcl --file ./$VERSION/$FLAVOR/slurm.hcl"
 docker bake $BAKE_IMPORTS slurmd
@@ -87,7 +87,7 @@ image from the images published by SchedMD:
 ```console
 $ docker image ls | head -n 2
 REPOSITORY                                                                       TAG                                                                IMAGE ID       CREATED          SIZE
-ghcr.io/slinkyproject/slurmd                                                     25.11-rockylinux9                                                  9434c2d4fae4   43 seconds ago   712MB
+ghcr.io/slinkyproject/slurmd                                                     26.05-rockylinux9                                                  9434c2d4fae4   43 seconds ago   712MB
 
 docker tag 9434c2d4fae4 ghcr.io/slinkyproject/slurmd:jupyterlab
 ```

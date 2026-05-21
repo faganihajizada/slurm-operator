@@ -24,9 +24,9 @@ In-depth instructions can be found at [Building Slinky Containers].
 The Slinky project uses Docker Buildx Bake to build modular images for each
 Slurm component. In order to extend or change functionality, the Dockerfile
 containing the images' build configuration must be modified. For example, the
-configuration for images built with Slurm 25.11 and Rocky Linux 9 can be found
+configuration for images built with Slurm 26.05 and Rocky Linux 9 can be found
 within the [containers] repo at:
-`containers/schedmd/slurm/25.11/rockylinux9/Dockerfile`.
+`containers/schedmd/slurm/26.05/rockylinux9/Dockerfile`.
 
 To install Pytorch for this example, change the packages that are installed by
 `dnf` in the `base-extra` layer. This can be done by appending the required
