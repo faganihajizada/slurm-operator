@@ -39,6 +39,7 @@ operator:
   image:
     repository: ghcr.io/slinkyproject/slurm-operator
     tag: null
+    digest: null
   # Service account configurations.
   serviceAccount:
     # -- Allows chart to create the service account.
@@ -135,6 +136,7 @@ webhook:
   image:
     repository: ghcr.io/slinkyproject/slurm-operator-webhook
     tag: null
+    digest: null
   #
   # Service account configurations.
   serviceAccount:
