@@ -28,7 +28,7 @@ spec:
       {{- include "slurm-operator.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: slurm-operator
-          image: {{ include "slurm-operator.operator.imageRef" . }}
+          image: {{ include "format-image" (list .Values.operator.image .Chart.Version) }}
           imagePullPolicy: {{ include "slurm-operator.operator.imagePullPolicy" . }}
           args:
             {{- with .Values.operator.accountingWorkers }}

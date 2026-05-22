@@ -37,29 +37,6 @@ Create the name of the operator service account to use
 {{- end }}
 
 {{/*
-Determine operator image repository
-*/}}
-{{- define "slurm-operator.operator.image.repository" -}}
-{{- $image := .Values.operator.image | default dict -}}
-{{ $image.repository | default "ghcr.io/slinkyproject/slurm-operator" }}
-{{- end }}
-
-{{/*
-Define operator image tag
-*/}}
-{{- define "slurm-operator.operator.image.tag" -}}
-{{- $image := .Values.operator.image | default dict -}}
-{{ $image.tag | default .Chart.Version }}
-{{- end }}
-
-{{/*
-Determine operator image reference (repo:tag)
-*/}}
-{{- define "slurm-operator.operator.imageRef" -}}
-{{ printf "%s:%s" (include "slurm-operator.operator.image.repository" .) (include "slurm-operator.operator.image.tag" .) | quote }}
-{{- end }}
-
-{{/*
 Define operator imagePullPolicy
 */}}
 {{- define "slurm-operator.operator.imagePullPolicy" -}}
