@@ -35,10 +35,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the webhook service account to use
 */}}
 {{- define "slurm-operator.webhook.serviceAccountName" -}}
-{{- if .Values.webhook.serviceAccount.create }}
-{{- default (include "slurm-operator.webhook.name" .) .Values.webhook.serviceAccount.name }}
+{{- $serviceAccount := .Values.webhook.serviceAccount | default dict -}}
+{{- if $serviceAccount.create }}
+{{- default (include "slurm-operator.webhook.name" .) $serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.webhook.serviceAccount.name }}
+{{- default "default" $serviceAccount.name }}
 {{- end }}
 {{- end }}
 
@@ -46,14 +47,16 @@ Create the name of the webhook service account to use
 Determine operator webhook image repository
 */}}
 {{- define "slurm-operator.webhook.image.repository" -}}
-{{ .Values.webhook.image.repository | default "ghcr.io/slinkyproject/slurm-operator-webhook" }}
+{{- $image := .Values.webhook.image | default dict -}}
+{{ $image.repository | default "ghcr.io/slinkyproject/slurm-operator-webhook" }}
 {{- end }}
 
 {{/*
 Define operator webhook image tag
 */}}
 {{- define "slurm-operator.webhook.image.tag" -}}
-{{ .Values.webhook.image.tag | default .Chart.Version }}
+{{- $image := .Values.webhook.image | default dict -}}
+{{ $image.tag | default .Chart.Version }}
 {{- end }}
 
 {{/*
