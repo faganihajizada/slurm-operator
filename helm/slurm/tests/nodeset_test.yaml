@@ -22,6 +22,9 @@ tests:
       - matchSnapshot: {}
   - it: should set imagePullSecrets
     set:
+      nodesets:
+        slinky:
+          enabled: true
       imagePullSecrets:
         - name: "docker-secret-1"
         - name: "docker-secret-2"

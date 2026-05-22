@@ -200,6 +200,7 @@ Install a Slurm cluster:
 
 ```sh
 helm install slurm oci://ghcr.io/slinkyproject/charts/slurm \
+  --set-json 'nodesets={"slinky":{}}' \
   --namespace=slurm --create-namespace
 ```
 

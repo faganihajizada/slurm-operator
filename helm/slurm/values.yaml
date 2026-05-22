@@ -788,9 +788,9 @@ nodesetDefaults:
       #     path: /exports/home
 
 # -- (map[string]object) Slurm NodeSet (slurmd) configurations.
-nodesets:
-  slinky:
-    enabled: true
+nodesets: {}
+  # slinky:
+  #   enabled: false
 
 # -- (map[string]object) Slurm partition configurations.
 # The map key represents the partition name (must be unique); the map value represents the partition definition.
