@@ -52,9 +52,11 @@ func NewNodeSetStatefulSetPod(
 		historycontrol.SetRevision(pod.Labels, revisionHash)
 	}
 
-	// The pod's PodAntiAffinity will be updated to make sure the Pod is not
-	// scheduled on the same Node as another NodeSet pod.
-	pod.Spec.Affinity = updateNodeSetPodAntiAffinity(pod.Spec.Affinity)
+	if !nodeset.Spec.OversubscribeNode {
+		// The pod's PodAntiAffinity will be updated to make sure the Pod is not
+		// scheduled on the same Node as another NodeSet pod.
+		pod.Spec.Affinity = updateNodeSetPodAntiAffinity(pod.Spec.Affinity)
+	}
 
 	// Ensure recreated pods are pinned to their node, but only if they still match their Node.
 	if nodeset.Spec.PinToNode {
@@ -114,9 +116,11 @@ func NewNodeSetDaemonSetPod(
 		historycontrol.SetRevision(pod.Labels, revisionHash)
 	}
 
-	// The pod's PodAntiAffinity will be updated to make sure the Pod is not
-	// scheduled on the same Node as another NodeSet pod.
-	pod.Spec.Affinity = updateNodeSetPodAntiAffinity(pod.Spec.Affinity)
+	if !nodeset.Spec.OversubscribeNode {
+		// The pod's PodAntiAffinity will be updated to make sure the Pod is not
+		// scheduled on the same Node as another NodeSet pod.
+		pod.Spec.Affinity = updateNodeSetPodAntiAffinity(pod.Spec.Affinity)
+	}
 
 	// WARNING: Do not use the spec.NodeName otherwise the Pod scheduler will
 	// be avoided and priorityClass will not be honored.

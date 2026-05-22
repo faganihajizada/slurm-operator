@@ -76,5 +76,6 @@ spec:
   pinToNode: {{ $nodeset.pinToNode }}
   workloadDisruptionProtection: {{ $nodeset.workloadDisruptionProtection }}
   pruneSlurmNodeRecords: {{ $nodeset.pruneSlurmNodeRecords }}
+  oversubscribeNode: {{ $nodeset.oversubscribeNode }}
 {{- end }}{{- /* $nodeset.enabled */}}
 {{- end }}{{- /* range $nodeset := $.Values.nodesets */}}

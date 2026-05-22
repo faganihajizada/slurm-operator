@@ -674,6 +674,9 @@ nodesetDefaults:
   pruneSlurmNodeRecords: Never
   # -- How many places to pad with zeroes when constructing the pod ordinal.
   ordinalPadding: 0
+  # -- Indicates these NodeSet Pods can reside on the same Kubernetes Node (no anti-affinity).
+  # WARNING: This option is **NOT** recommended for production usage.
+  oversubscribeNode: false
   # slurmd container configurations.
   slurmd:
     # -- (string \| object) The image to use.

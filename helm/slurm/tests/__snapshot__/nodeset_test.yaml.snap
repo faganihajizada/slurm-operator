@@ -18,6 +18,7 @@ manifest should match snapshot:
         imagePullPolicy: IfNotPresent
         resources: {}
       ordinalPadding: 0
+      oversubscribeNode: false
       partition:
         enabled: false
       pinToNode: false
