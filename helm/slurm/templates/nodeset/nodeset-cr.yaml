@@ -4,6 +4,7 @@ SPDX-License-Identifier: Apache-2.0
 */}}
 
 {{- range $key, $nodeset := $.Values.nodesets }}
+{{- $nodeset = mergeOverwrite (dict) (deepCopy ($.Values.nodesetDefaults | default dict)) (deepCopy ($nodeset | default dict)) -}}
 {{- if $nodeset.enabled }}
 {{- $name := printf "%s-%s" (include "slurm.worker.name" $) $key }}
 {{- $metadata := merge dict ($nodeset.metadata | default dict) (dict "labels" (fromYaml (include "slurm.labels" $))) -}}

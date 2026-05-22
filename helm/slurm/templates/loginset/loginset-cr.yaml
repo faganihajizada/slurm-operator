@@ -4,6 +4,7 @@ SPDX-License-Identifier: Apache-2.0
 */}}
 
 {{- range $key, $loginset := $.Values.loginsets }}
+{{- $loginset = mergeOverwrite (dict) (deepCopy ($.Values.loginsetDefaults | default dict)) (deepCopy ($loginset | default dict)) -}}
 {{- if $loginset.enabled }}
 {{- $name := printf "%s-%s" (include "slurm.login.name" $) $key }}
 {{- $metadata := merge dict ($loginset | dig "metadata" dict) (dict "labels" (fromYaml (include "slurm.labels" $))) -}}

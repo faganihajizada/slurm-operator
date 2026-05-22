@@ -36,6 +36,7 @@ Determine controller extraConf
 {{- end -}}
 {{- $nodesetList := list "ALL" -}}
 {{- range $nodesetName, $nodeset := .Values.nodesets -}}
+  {{- $nodeset = mergeOverwrite (dict) (deepCopy ($.Values.nodesetDefaults | default dict)) (deepCopy ($nodeset | default dict)) -}}
   {{- if $nodeset.enabled }}
     {{- $nodesetList = append $nodesetList $nodesetName }}
   {{- end }}{{- /* if $nodeset.enabled */}}
