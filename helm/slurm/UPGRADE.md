@@ -18,6 +18,8 @@ the migration steps.
 
 - Value `nodesets.slinky` is no longer enabled by default. To keep this named
   NodeSet, install with `--set-json 'nodesets={"slinky":{}}'`.
+- Value `partitions.all` is no longer enabled by default. To enable it, install
+  with `--set partitions.all.enabled=true`.
 
 ## From 1.0.x to 1.1.x
 

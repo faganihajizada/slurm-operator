@@ -798,7 +798,7 @@ partitions:
   # Example partition containing all NodeSets.
   all:
     # -- Enable this partition to be defined in Slurm config.
-    enabled: true
+    enabled: false
     # -- List of NodeSets to be associated with this partition.
     # Ref: https://slurm.schedmd.com/slurm.conf.html#OPT_Nodes_1
     nodesets:
@@ -810,7 +810,6 @@ partitions:
     # If `config` is not empty, it takes precedence.
     # Ref: https://slurm.schedmd.com/slurm.conf.html#SECTION_PARTITION-CONFIGURATION
     configMap:
-      State: UP
       Default: "YES"
       MaxTime: UNLIMITED
 
