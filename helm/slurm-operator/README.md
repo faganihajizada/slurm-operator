@@ -34,6 +34,8 @@ Kubernetes: `>= 1.29.0-0`
 | certManager.secretName | string | `"slurm-operator-webhook-ca"` | The secret to be (created and) mounted. |
 | crds | object | `{"enabled":false}` | Configure Custom Resource Definitions (CRDs). |
 | crds.enabled | bool | `false` | Whether this helm chart should manage the CRD and its upgrades. |
+| externalCertInjection.enabled | bool | `false` | Mount a pre-existing TLS Secret instead of provisioning one. |
+| externalCertInjection.secretName | string | `""` | Name of a pre-existing kubernetes.io/tls Secret containing `tls.crt`, `tls.key`, and `ca.crt`. Must be set explicitly when `enabled` is true; intentionally has no default to avoid silently reusing the chart-managed Secret name during migrations. |
 | extraObjects | list | `[]` | Extra Kubernetes objects to deploy alongside the chart. Each entry is rendered as a standalone Kubernetes object. Supports Helm templating (e.g. {{ .Release.Namespace }}). |
 | fullnameOverride | string | `""` | Overrides the full name of the release. |
 | imagePullPolicy | string | `"IfNotPresent"` | Set the default image pull policy. |
@@ -74,6 +76,7 @@ Kubernetes: `>= 1.29.0-0`
 | webhook.leaderElection | bool | `true` | Enable leader election for slurm-operator-webhook |
 | webhook.logLevel | string | `"info"` | Set the log level by string (e.g. error, info, debug) or number (e.g. 1..5). |
 | webhook.metricsPort | int | `0` | Set the port used by the metrics server. Value of "0" will disable it. |
+| webhook.mutatingAnnotations | object | `{}` | Extra annotations on the MutatingWebhookConfiguration. Merged with chart-managed annotations; user keys win on collision. |
 | webhook.namespaces | string | `""` | Comma-separated list of namespaces the webhook will watch. If empty, all namespaces are watched. |
 | webhook.pdb.enabled | bool | `false` | Enable PodDisruptionBudget. |
 | webhook.pdb.minAvailable | int | `1` | Minimum number of pods that must still be available after eviction. Can be an absolute number (ex: 5) or a percentage (ex: 25%). |
@@ -85,4 +88,5 @@ Kubernetes: `>= 1.29.0-0`
 | webhook.timeoutSeconds | int | `10` | Set the timeout period for calls. |
 | webhook.tolerations | list | `[]` | Tolerations for pod assignment. Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ |
 | webhook.topologySpreadConstraints | list | `[]` | Topology spread constraints for pod assignment. Prefer scheduling replicas across failure domains (nodes, zones, ...) when running in HA. Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/ |
+| webhook.validatingAnnotations | object | `{}` | Extra annotations on the ValidatingWebhookConfiguration. Merged with chart-managed annotations; user keys win on collision. |
 
