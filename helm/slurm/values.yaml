@@ -576,8 +576,8 @@ loginsetDefaults:
       digest: null
     # -- Environment passed to the image.
     env: []
-      # - name: SACKD_DEBUG
-      #   value: debug2
+      # - name: SACKD_OPTIONS
+      #   value: -vvv
     # -- The container security context to use.
     # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
     securityContext:
