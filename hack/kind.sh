@@ -177,6 +177,20 @@ function extras::install() {
 	fi
 }
 
+function ldap::install() {
+	local chartName
+
+	helm repo add helm-openldap https://jp-gouin.github.io/helm-openldap/
+	helm repo update helm-openldap
+
+	chartName=openldap
+	if ! helm::find "$chartName"; then
+		helm install "$chartName" helm-openldap/openldap-stack-ha \
+			--namespace ldap --create-namespace \
+			--values "$DIR"/openldap-values.yaml
+	fi
+}
+
 function main::help() {
 	cat <<EOF
 $(basename "$0") - Manage a kind cluster for local testing/development
@@ -194,7 +208,7 @@ KIND OPTIONS:
 
 HELM OPTIONS:
 	--all               Equivalent of: --core --extras
-	--extras            Install extra charts (e.g. prometheus, keda, etc..).
+	--extras            Install extra charts (e.g. prometheus, keda, OpenLDAP, etc..).
 	--core              Equivalent of: --crds --operator --slurm
 	--crds              Install the operator CRDs chart.
 	--operator          Install the operator chart.
@@ -299,6 +313,7 @@ function main() {
 
 	if $OPT_EXTRAS; then
 		extras::install
+		ldap::install
 	fi
 
 	if $OPT_OPERATOR_CRDS; then
