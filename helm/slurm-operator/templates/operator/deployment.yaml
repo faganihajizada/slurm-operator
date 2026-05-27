@@ -96,6 +96,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.operator.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}{{- /* with .Values.operator.securityContext */}}
       {{- with .Values.operator.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
@@ -108,4 +112,8 @@ spec:
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}{{- /* with .Values.operator.topologySpreadConstraints */}}
+      {{- with .Values.operator.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}{{- /* with .Values.operator.podSecurityContext */}}
 {{- end }}{{- /* if .Values.operator.enabled */}}

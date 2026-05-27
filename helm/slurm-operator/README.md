@@ -55,9 +55,11 @@ Kubernetes: `>= 1.29.0-0`
 | operator.nodesetWorkers | int | `4` | Set the max concurrent workers for the NodeSet controller. |
 | operator.pdb.enabled | bool | `false` | Enable PodDisruptionBudget. |
 | operator.pdb.minAvailable | int | `1` | Minimum number of pods that must still be available after eviction. Can be an absolute number (ex: 5) or a percentage (ex: 25%). |
+| operator.podSecurityContext | object | `{}` | Pod-level security context for the operator pod. Applied to all containers in the pod. Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/ |
 | operator.replicas | int | `1` | Set the number of replicas to deploy. |
 | operator.resources | object | `{}` | The container resource limits and requests. Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container |
 | operator.restapiWorkers | int | `4` | Set the max concurrent workers for the Restapi controller. |
+| operator.securityContext | object | `{}` | Container-level security context for the operator container. Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container |
 | operator.serviceAccount.create | bool | `true` | Allows chart to create the service account. |
 | operator.serviceAccount.name | string | `""` | Set the service account to use (and create). |
 | operator.slurmclientWorkers | int | `2` | Set the max concurrent workers for the SlurmClient controller. |
@@ -77,8 +79,10 @@ Kubernetes: `>= 1.29.0-0`
 | webhook.namespaces | string | `""` | Comma-separated list of namespaces the webhook will watch. If empty, all namespaces are watched. |
 | webhook.pdb.enabled | bool | `false` | Enable PodDisruptionBudget. |
 | webhook.pdb.minAvailable | int | `1` | Minimum number of pods that must still be available after eviction. Can be an absolute number (ex: 5) or a percentage (ex: 25%). |
+| webhook.podSecurityContext | object | `{}` | Pod-level security context for the webhook pod. Applied to all containers in the pod. Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/ |
 | webhook.replicas | int | `1` | Set the number of replicas to deploy. |
 | webhook.resources | object | `{}` | The container resource limits and requests. Ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-requests-and-limits-of-pod-and-container |
+| webhook.securityContext | object | `{}` | Container-level security context for the webhook container. Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container |
 | webhook.serverPort | int | `9443` | Set the port used for the webhook server |
 | webhook.serviceAccount.create | bool | `true` | Allows chart to create the service account. |
 | webhook.serviceAccount.name | string | `""` | Set the service account to use (and create). |

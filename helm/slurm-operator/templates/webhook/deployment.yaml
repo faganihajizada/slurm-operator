@@ -70,6 +70,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.webhook.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}{{- /* with .Values.webhook.securityContext */}}
           volumeMounts:
             - name: certificates
               mountPath: /tmp/k8s-webhook-server/serving-certs/
@@ -86,6 +90,10 @@ spec:
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}{{- /* with .Values.webhook.topologySpreadConstraints */}}
+      {{- with .Values.webhook.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}{{- /* with .Values.webhook.podSecurityContext */}}
       volumes:
         - name: certificates
           secret:
