@@ -52,6 +52,7 @@ Kubernetes: `>= 1.29.0-0`
 | operator.loginsetWorkers | int | `4` | Set the max concurrent workers for the LoginSet controller. |
 | operator.metricsPort | int | `8080` | Set the port used by the metrics server. Value of "0" will disable it. |
 | operator.namespaces | string | `""` | Comma-separated list of namespaces the operator will watch. If empty, all namespaces are watched. |
+| operator.nodeSelector | object | `{}` | Node label selector for pod assignment. Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector |
 | operator.nodesetWorkers | int | `4` | Set the max concurrent workers for the NodeSet controller. |
 | operator.pdb.enabled | bool | `false` | Enable PodDisruptionBudget. |
 | operator.pdb.minAvailable | int | `1` | Minimum number of pods that must still be available after eviction. Can be an absolute number (ex: 5) or a percentage (ex: 25%). |
@@ -77,6 +78,7 @@ Kubernetes: `>= 1.29.0-0`
 | webhook.logLevel | string | `"info"` | Set the log level by string (e.g. error, info, debug) or number (e.g. 1..5). |
 | webhook.metricsPort | int | `0` | Set the port used by the metrics server. Value of "0" will disable it. |
 | webhook.namespaces | string | `""` | Comma-separated list of namespaces the webhook will watch. If empty, all namespaces are watched. |
+| webhook.nodeSelector | object | `{}` | Node label selector for pod assignment. Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector |
 | webhook.pdb.enabled | bool | `false` | Enable PodDisruptionBudget. |
 | webhook.pdb.minAvailable | int | `1` | Minimum number of pods that must still be available after eviction. Can be an absolute number (ex: 5) or a percentage (ex: 25%). |
 | webhook.podSecurityContext | object | `{}` | Pod-level security context for the webhook pod. Applied to all containers in the pod. Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/ |
