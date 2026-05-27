@@ -312,6 +312,7 @@ function main() {
 	fi
 
 	if $OPT_EXTRAS; then
+		kubectl create namespace slurm --dry-run=client -o yaml | kubectl apply -f -
 		until kubectl apply -f "$DIR"/resources; do
 			sleep 2
 		done
