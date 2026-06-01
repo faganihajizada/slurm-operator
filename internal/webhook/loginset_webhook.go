@@ -76,5 +76,10 @@ func (r *LoginSetWebhook) validateLoginSet(loginset *slinkyv1beta1.LoginSet) (ad
 		errs = append(errs, errors.New("sssdConfRef.name must not be empty"))
 	}
 
+	// Prevent MitM via CVE-2020-8554
+	if loginset.Spec.Service.ServiceSpecWrapper.ExternalIPs != nil {
+		warns = append(warns, "ExternalIPs may not be set for loginset service")
+	}
+
 	return warns, errs
 }

@@ -40,15 +40,16 @@ var _ admission.Validator[*slinkyv1beta1.Accounting] = &AccountingWebhook{}
 func (r *AccountingWebhook) ValidateCreate(ctx context.Context, accounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate create", "accounting", klog.KObj(accounting))
 
-	return nil, nil
+	warns, errs := r.validateAccounting(accounting)
+
+	return warns, utilerrors.NewAggregate(errs)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AccountingWebhook) ValidateUpdate(ctx context.Context, oldAccounting, newAccounting *slinkyv1beta1.Accounting) (admission.Warnings, error) {
 	accountinglog.Info("validate update", "newAccounting", klog.KObj(newAccounting))
 
-	var warns admission.Warnings
-	var errs []error
+	warns, errs := r.validateAccounting(newAccounting)
 
 	if !apiequality.Semantic.DeepEqual(newAccounting.AuthJwtRef(), oldAccounting.AuthJwtRef()) {
 		errs = append(errs, errors.New("the value of JwtKeyRef or JwtHs256KeyRef cannot be modified after deployment"))
@@ -62,4 +63,16 @@ func (r *AccountingWebhook) ValidateDelete(ctx context.Context, accounting *slin
 	accountinglog.Info("validate delete", "accounting", klog.KObj(accounting))
 
 	return nil, nil
+}
+
+func (r *AccountingWebhook) validateAccounting(accounting *slinkyv1beta1.Accounting) (admission.Warnings, []error) {
+	var warns admission.Warnings
+	var errs []error
+
+	// Prevent MitM via CVE-2020-8554
+	if accounting.Spec.Service.ServiceSpecWrapper.ExternalIPs != nil {
+		warns = append(warns, "ExternalIPs may not be set for accounting service")
+	}
+
+	return warns, errs
 }
