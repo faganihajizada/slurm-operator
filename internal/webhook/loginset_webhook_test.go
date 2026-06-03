@@ -37,6 +37,16 @@ var _ = Describe("LoginSet Webhook", func() {
 			_, err := loginSetWebhook.ValidateCreate(ctx, loginset)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("Should warn if external IPs are set", func(ctx SpecContext) {
+			controller := testutils.NewController("valid-controller", corev1.SecretKeySelector{}, corev1.SecretKeySelector{}, nil)
+			loginset := testutils.NewLoginset("test-loginset", controller, testutils.NewSssdConfRef("test"))
+			loginset.Spec.Service.ServiceSpecWrapper.ExternalIPs = []string{"169.254.169.254"}
+
+			warnings, err := loginSetWebhook.ValidateCreate(ctx, loginset)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(ContainElement("ExternalIPs may not be set for loginset service"))
+		})
 	})
 
 	Context("When Updating a LoginSet with Validating Webhook", func() {
