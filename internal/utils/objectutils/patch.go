@@ -287,23 +287,52 @@ func SyncObject(c client.Client, ctx context.Context, eventRecorder events.Event
 }
 
 func PatchObject[T client.Object](c client.Client, ctx context.Context, obj T, mutateFn func(T) error) error {
-	if mutateFn == nil {
-		return errors.New("mutateFn is required")
-	}
 	key := client.ObjectKeyFromObject(obj)
-	if err := c.Get(ctx, key, obj); err != nil {
-		return fmt.Errorf("error getting %s: %w", key, err)
+	patch, err := createPatch(obj, mutateFn)
+	if err != nil {
+		return fmt.Errorf("failed to create object patch for %s: %w", key, err)
 	}
-	baseline, ok := obj.DeepCopyObject().(client.Object)
-	if !ok {
-		return fmt.Errorf("DeepCopy of %T did not yield a client.Object", obj)
-	}
-	if err := mutateFn(obj); err != nil {
+	data, err := patch.Data(obj)
+	if err != nil {
 		return err
+	} else if string(data) == "{}" {
+		return nil
 	}
-	patch := client.MergeFrom(baseline)
 	if err := c.Patch(ctx, obj, patch); err != nil {
 		return fmt.Errorf("failed to patch %s: %w", key, err)
 	}
 	return nil
+}
+
+func StatusPatchObject[T client.Object](c client.Client, ctx context.Context, obj T, mutateFn func(T) error) error {
+	key := client.ObjectKeyFromObject(obj)
+	patch, err := createPatch(obj, mutateFn)
+	if err != nil {
+		return fmt.Errorf("failed to create object patch for %s: %w", key, err)
+	}
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	} else if string(data) == "{}" {
+		return nil
+	}
+	if err := c.Status().Patch(ctx, obj, patch); err != nil {
+		return fmt.Errorf("failed to patch %s: %w", key, err)
+	}
+	return nil
+}
+
+func createPatch[T client.Object](obj T, mutateFn func(T) error) (client.Patch, error) {
+	if mutateFn == nil {
+		return nil, errors.New("mutateFn is required")
+	}
+	baseline, ok := obj.DeepCopyObject().(client.Object)
+	if !ok {
+		return nil, fmt.Errorf("DeepCopy of %T did not yield a client.Object", obj)
+	}
+	if err := mutateFn(obj); err != nil {
+		return nil, err
+	}
+	patch := client.MergeFrom(baseline)
+	return patch, nil
 }
