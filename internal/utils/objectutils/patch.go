@@ -288,7 +288,7 @@ func SyncObject(c client.Client, ctx context.Context, eventRecorder events.Event
 
 func PatchObject[T client.Object](c client.Client, ctx context.Context, obj T, mutateFn func(T) error) error {
 	key := client.ObjectKeyFromObject(obj)
-	patch, err := createPatch(c, ctx, obj, mutateFn)
+	patch, err := createPatch(obj, mutateFn)
 	if err != nil {
 		return fmt.Errorf("failed to create object patch for %s: %w", key, err)
 	}
@@ -306,7 +306,7 @@ func PatchObject[T client.Object](c client.Client, ctx context.Context, obj T, m
 
 func StatusPatchObject[T client.Object](c client.Client, ctx context.Context, obj T, mutateFn func(T) error) error {
 	key := client.ObjectKeyFromObject(obj)
-	patch, err := createPatch(c, ctx, obj, mutateFn)
+	patch, err := createPatch(obj, mutateFn)
 	if err != nil {
 		return fmt.Errorf("failed to create object patch for %s: %w", key, err)
 	}
@@ -322,13 +322,9 @@ func StatusPatchObject[T client.Object](c client.Client, ctx context.Context, ob
 	return nil
 }
 
-func createPatch[T client.Object](c client.Client, ctx context.Context, obj T, mutateFn func(T) error) (client.Patch, error) {
+func createPatch[T client.Object](obj T, mutateFn func(T) error) (client.Patch, error) {
 	if mutateFn == nil {
 		return nil, errors.New("mutateFn is required")
-	}
-	key := client.ObjectKeyFromObject(obj)
-	if err := c.Get(ctx, key, obj); err != nil {
-		return nil, fmt.Errorf("error getting %s: %w", key, err)
 	}
 	baseline, ok := obj.DeepCopyObject().(client.Object)
 	if !ok {
