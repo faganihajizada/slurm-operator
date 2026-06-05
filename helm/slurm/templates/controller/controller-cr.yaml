@@ -56,6 +56,10 @@ spec:
     {{- if .Values.configFiles }}
     - name: {{ include "slurm.controller.configName" . }}
     {{- end }}{{- /* if .Values.configFiles */}}
+    {{- $hasGresConf := hasKey (.Values.configFiles | default dict) "gres.conf" -}}
+    {{- if and (include "slurm.vendor.google.a3mega.enabled" .) (not $hasGresConf) }}
+    - name: {{ include "slurm.vendor.google.a3mega.configName" . }}
+    {{- end }}{{- /* and (include "slurm.vendor.google.a3mega.enabled" .) (not $hasGresConf) */}}
   prologScriptRefs:
     {{- if .Values.prologScripts }}
     - name: {{ include "slurm.controller.prologName" . }}

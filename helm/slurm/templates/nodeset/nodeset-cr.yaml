@@ -18,6 +18,10 @@ SPDX-License-Identifier: Apache-2.0
 {{- $slurmd := $nodeset.slurmd | default dict -}}
 {{- $logfile := $nodeset.logfile | default dict -}}
 {{- $podTemplate := dict "metadata" $metadata "spec" $podSpec -}}
+
+{{- /* ================= BEGIN GKE A3 MEGA INJECTION ================= */}}
+{{- include "slurm.vendor.google.a3mega" (dict "root" $ "key" $key "nodeset" $nodeset "metadata" $metadata "podSpec" $podSpec) -}}
+{{- /* ================= END GKE A3 MEGA INJECTION ================= */}}
 ---
 apiVersion: slinky.slurm.net/v1beta1
 kind: NodeSet
