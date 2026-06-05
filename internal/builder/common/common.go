@@ -324,3 +324,12 @@ func parseKVKey(s string) string {
 	k, _, _ := strings.Cut(s, "=")
 	return strings.ToLower(k)
 }
+
+// GetSlurmNodeSetName returns the Slurm NodeSet name.
+func GetSlurmNodeSetName(nodeset *slinkyv1beta1.NodeSet) string {
+	spec := nodeset.Spec.Template.PodSpecWrapper
+	if spec.Hostname != "" {
+		return strings.Trim(spec.Hostname, "-")
+	}
+	return nodeset.Name
+}

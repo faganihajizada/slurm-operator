@@ -338,11 +338,7 @@ func buildNodeSetConf(nodesetList *slinkyv1beta1.NodeSetList) string {
 		return nodesetList.Items[i].Name < nodesetList.Items[j].Name
 	})
 	for _, nodeset := range nodesetList.Items {
-		name := nodeset.Name
-		template := nodeset.Spec.Template.PodSpecWrapper
-		if template.Hostname != "" {
-			name = strings.Trim(template.Hostname, "-")
-		}
+		name := common.GetSlurmNodeSetName(&nodeset)
 		nodesetLine := []string{
 			fmt.Sprintf("NodeSet=%v", name),
 			fmt.Sprintf("Feature=%v", name),
