@@ -1125,7 +1125,10 @@ func (r *NodeSetReconciler) newNodeSetPodDaemon(
 	revisionHash string,
 ) (*corev1.Pod, error) {
 	controller := &slinkyv1beta1.Controller{}
-	key := nodeset.Spec.ControllerRef.NamespacedName()
+	key := types.NamespacedName{
+		Namespace: nodeset.Namespace,
+		Name:      nodeset.Spec.ControllerRef.Name,
+	}
 	if err := r.Get(ctx, key, controller); err != nil {
 		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, ControllerRefFailedReason, "Info",
 			"Failed to get Controller (%s): %v", key, err)
@@ -1155,7 +1158,10 @@ func newSimulatedDaemonPod(
 	nodeName string,
 ) (*corev1.Pod, error) {
 	controller := &slinkyv1beta1.Controller{}
-	key := nodeset.Spec.ControllerRef.NamespacedName()
+	key := types.NamespacedName{
+		Namespace: nodeset.Namespace,
+		Name:      nodeset.Spec.ControllerRef.Name,
+	}
 	if err := client.Get(ctx, key, controller); err != nil {
 		return nil, err
 	}
@@ -1175,7 +1181,10 @@ func (r *NodeSetReconciler) newNodeSetPodOrdinal(
 	revisionHash string,
 ) (*corev1.Pod, error) {
 	controller := &slinkyv1beta1.Controller{}
-	key := nodeset.Spec.ControllerRef.NamespacedName()
+	key := types.NamespacedName{
+		Namespace: nodeset.Namespace,
+		Name:      nodeset.Spec.ControllerRef.Name,
+	}
 	if err := r.Get(ctx, key, controller); err != nil {
 		r.eventRecorder.Eventf(nodeset, nil, corev1.EventTypeWarning, ControllerRefFailedReason, "Info",
 			"Failed to get Controller (%s): %v", key, err)
