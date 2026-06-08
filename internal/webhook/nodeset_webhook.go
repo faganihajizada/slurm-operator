@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
@@ -91,6 +92,13 @@ func (r *NodeSetWebhook) validateNodeSet(nodeset *slinkyv1beta1.NodeSet) (admiss
 
 	if nodeset.Spec.Ssh.Enabled && nodeset.Spec.Ssh.SssdConfRef.Name == "" {
 		errs = append(errs, errors.New("ssh.sssdConfRef.name must not be empty when ssh is enabled"))
+	}
+
+	hostname := nodeset.Spec.Template.PodSpecWrapper.Hostname
+	if hostname != "" {
+		for _, msg := range apivalidation.NameIsDNSSubdomain(hostname, true) {
+			errs = append(errs, fmt.Errorf("template.spec.hostname: %s", msg))
+		}
 	}
 
 	return warns, errs
