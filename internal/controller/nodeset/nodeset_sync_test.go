@@ -50,6 +50,7 @@ import (
 	"github.com/SlinkyProject/slurm-operator/internal/utils/podinfo"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/podutils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/structutils"
+	"github.com/SlinkyProject/slurm-operator/internal/utils/testutils"
 )
 
 func newNodeSetController(client client.Client, clientMap *clientmap.ClientMap) *NodeSetReconciler {
@@ -581,6 +582,40 @@ func TestNodeSetReconciler_sync(t *testing.T) {
 			r := newNodeSetController(tt.fields.Client, tt.fields.ClientMap)
 			if err := r.sync(tt.args.ctx, tt.args.nodeset, tt.args.pods, tt.args.hash); (err != nil) != tt.wantErr {
 				t.Errorf("NodeSetReconciler.sync() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func BenchmarkNodeSetReconciler_sync(b *testing.B) {
+	benchmarks := []struct {
+		name    string
+		wantErr bool
+	}{
+		{
+			name:    "default",
+			wantErr: false,
+		},
+	}
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			for b.Loop() {
+				b.StopTimer()
+				controller := &slinkyv1beta1.Controller{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "slurm",
+					},
+				}
+				nodeset := testutils.NewNodeset("slinky", controller, 1)
+				kubeClient := fake.NewFakeClient(controller.DeepCopy())
+				sclient := newFakeClientList(sinterceptor.Funcs{})
+				clientMap := newClientMap(controller.Name, sclient)
+				r := newNodeSetController(kubeClient, clientMap)
+				b.StartTimer()
+
+				if err := r.sync(context.TODO(), nodeset, nil, ""); (err != nil) != bb.wantErr {
+					b.Errorf("NodeSetReconciler.sync() error = %v, wantErr %v", err, bb.wantErr)
+				}
 			}
 		})
 	}
