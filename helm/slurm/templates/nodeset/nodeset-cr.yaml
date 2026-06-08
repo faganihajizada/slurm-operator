@@ -71,7 +71,6 @@ spec:
   {{- end }}{{- /* with $nodeset.updateStrategy */}}
   ordinalPadding: {{ $nodeset.ordinalPadding }}
   pinToNode: {{ $nodeset.pinToNode }}
-  taintKubeNodes: {{ $nodeset.taintKubeNodes }}
   workloadDisruptionProtection: {{ $nodeset.workloadDisruptionProtection }}
   pruneSlurmNodeRecords: {{ $nodeset.pruneSlurmNodeRecords }}
 {{- end }}{{- /* $nodeset.enabled */}}
