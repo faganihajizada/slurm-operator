@@ -34,11 +34,12 @@ operator:
   replicas: 1
   # -- Set the image pull policy.
   imagePullPolicy: IfNotPresent
-  # -- The image to use, `${repository}:${tag}`.
+  # -- The image to use.
   # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
   image:
     repository: ghcr.io/slinkyproject/slurm-operator
-    tag: ""
+    tag: null
+    digest: null
   # Service account configurations.
   serviceAccount:
     # -- Allows chart to create the service account.
@@ -130,11 +131,12 @@ webhook:
   replicas: 1
   # -- Set the image pull policy.
   imagePullPolicy: IfNotPresent
-  # -- The image to use, `${repository}:${tag}`.
+  # -- The image to use.
   # Ref: https://kubernetes.io/docs/concepts/containers/images/#image-names
   image:
     repository: ghcr.io/slinkyproject/slurm-operator-webhook
-    tag: ""
+    tag: null
+    digest: null
   #
   # Service account configurations.
   serviceAccount:
