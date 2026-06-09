@@ -18,7 +18,7 @@ Run [Slurm] on [Kubernetes], by [SchedMD]. A [Slinky] project.
     - [LoginSets](#loginsets)
     - [Hybrid Support](#hybrid-support)
     - [Slurm](#slurm)
-  - [Compatibility](#compatibility)
+  - [Compatibility Matrix](#compatibility-matrix)
   - [Quick Start](#quick-start)
   - [Upgrades](#upgrades)
     - [1.Y Releases](#1y-releases)
@@ -169,13 +169,18 @@ Slurm is a full featured HPC workload manager. To highlight a few features:
 - [**Node Health Check**][slurm-healthcheck]: periodically check node health via
   script.
 
-## Compatibility
+## Compatibility Matrix
 
-| Software   |                             Minimum Version                              |
-| :--------- | :----------------------------------------------------------------------: |
-| Kubernetes | [v1.29](https://kubernetes.io/blog/2023/12/13/kubernetes-v1-29-release/) |
-| Slurm      | [25.11](https://www.schedmd.com/slurm-version-25-11-0-is-now-available/) |
-| Cgroup     |         [v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)         |
+| Release | Minimum <br> Kubernetes |          Minimum <br> Slurm (Data Parser)           |
+| :-----: | :---------------------: | :-------------------------------------------------: |
+| [v1.2]  |   [v1.29][k8s-v1.29]    | [25.11][slurm-25.11] ([v0.0.44][slurm-data_parser]) |
+| [v1.1]  |   [v1.29][k8s-v1.29]    | [25.11][slurm-25.11] ([v0.0.44][slurm-data_parser]) |
+| [v1.0]  |   [v1.29][k8s-v1.29]    | [25.11][slurm-25.11] ([v0.0.44][slurm-data_parser]) |
+
+Please refer to the following lifecycle documents for support guidance:
+
+- [Kubernetes][k8s-lifecycle]
+- [Slurm][slurm-lifecycle]
 
 ## Quick Start
 
@@ -311,24 +316,32 @@ specific language governing permissions and limitations under the License.
 [crds]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions
 [custom-controllers]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#custom-controllers
 [installation]: ./docs/installation.md
+[k8s-lifecycle]: https://kubernetes.io/releases/#release-history
+[k8s-v1.29]: https://github.com/kubernetes/kubernetes/releases/tag/v1.29.0
 [kubernetes]: https://kubernetes.io/
 [schedmd]: https://schedmd.com/
 [semver]: https://semver.org/
 [slinky]: https://slinky.ai/
 [slinky-docs]: https://slinky.schedmd.com/
 [slurm]: https://slurm.schedmd.com/overview.html
+[slurm-25.11]: https://github.com/SchedMD/slurm/releases/tag/slurm-25-11-0-1
 [slurm-accounting]: https://slurm.schedmd.com/accounting.html
 [slurm-arch]: https://slurm.schedmd.com/quickstart.html#arch
 [slurm-containers]: https://slurm.schedmd.com/containers.html
+[slurm-data_parser]: https://slurm.schedmd.com/rest_clients.html#data_parser_lifecycle
 [slurm-dependency]: https://slurm.schedmd.com/sbatch.html#OPT_dependency
 [slurm-docs]: ./docs/concepts/slurm.md
 [slurm-drain]: https://slurm.schedmd.com/scontrol.html#OPT_DRAIN
 [slurm-fairshare]: https://slurm.schedmd.com/fair_tree.html
 [slurm-ha]: https://slurm.schedmd.com/quickstart_admin.html#HA
 [slurm-healthcheck]: https://slurm.schedmd.com/slurm.conf.html#OPT_HealthCheckProgram
+[slurm-lifecycle]: https://slurm.schedmd.com/upgrades.html#compatibility_window
 [slurm-mpi]: https://slurm.schedmd.com/mpi_guide.html
 [slurm-preempt]: https://slurm.schedmd.com/preempt.html
 [slurm-priority]: https://slurm.schedmd.com/priority_multifactor.html
 [slurm-qos]: https://slurm.schedmd.com/qos.html
 [slurm-reservations]: https://slurm.schedmd.com/reservations.html
+[v1.0]: https://github.com/SlinkyProject/slurm-operator/releases/tag/v1.0.0
+[v1.1]: https://github.com/SlinkyProject/slurm-operator/releases/tag/v1.1.0
+[v1.2]: https://github.com/SlinkyProject/slurm-operator/releases/tag/v1.2.0
 [versioning]: ./docs/versioning.md
