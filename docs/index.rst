@@ -33,7 +33,7 @@ Table of Contents
     - `Hybrid Support <#hybrid-support>`__
     - `Slurm <#slurm>`__
 
-  - `Compatibility <#compatibility>`__
+  - `Compatibility Matrix <#compatibility-matrix>`__
   - `Quick Start <#quick-start>`__
   - `Upgrades <#upgrades>`__
 
@@ -228,18 +228,26 @@ features:
   Check <https://slurm.schedmd.com/slurm.conf.html#OPT_HealthCheckProgram>`__:
   periodically check node health via script.
 
-Compatibility
--------------
+Compatibility Matrix
+--------------------
 
-+------------+-----------------------------------------------------------------------------+
-| Software   | Minimum Version                                                             |
-+============+=============================================================================+
-| Kubernetes | `v1.29 <https://kubernetes.io/blog/2023/12/13/kubernetes-v1-29-release/>`__ |
-+------------+-----------------------------------------------------------------------------+
-| Slurm      | `25.11 <https://www.schedmd.com/slurm-version-25-11-0-is-now-available/>`__ |
-+------------+-----------------------------------------------------------------------------+
-| Cgroup     | `v2 <https://docs.kernel.org/admin-guide/cgroup-v2.html>`__                 |
-+------------+-----------------------------------------------------------------------------+
++--------------------------------------------------------------------------------+---------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+| Release                                                                        | Minimum Kubernetes                                                        | Minimum Slurm (Data Parser)                                                       |
++================================================================================+===========================================================================+===================================================================================+
+| `v1.2 <https://github.com/SlinkyProject/slurm-operator/releases/tag/v1.2.0>`__ | `v1.29 <https://github.com/kubernetes/kubernetes/releases/tag/v1.29.0>`__ | `25.11 <https://github.com/SchedMD/slurm/releases/tag/slurm-25-11-0-1>`__         |
+|                                                                                |                                                                           | (`v0.0.44 <https://slurm.schedmd.com/rest_clients.html#data_parser_lifecycle>`__) |
++--------------------------------------------------------------------------------+---------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+| `v1.1 <https://github.com/SlinkyProject/slurm-operator/releases/tag/v1.1.0>`__ | `v1.29 <https://github.com/kubernetes/kubernetes/releases/tag/v1.29.0>`__ | `25.11 <https://github.com/SchedMD/slurm/releases/tag/slurm-25-11-0-1>`__         |
+|                                                                                |                                                                           | (`v0.0.44 <https://slurm.schedmd.com/rest_clients.html#data_parser_lifecycle>`__) |
++--------------------------------------------------------------------------------+---------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+| `v1.0 <https://github.com/SlinkyProject/slurm-operator/releases/tag/v1.0.0>`__ | `v1.29 <https://github.com/kubernetes/kubernetes/releases/tag/v1.29.0>`__ | `25.11 <https://github.com/SchedMD/slurm/releases/tag/slurm-25-11-0-1>`__         |
+|                                                                                |                                                                           | (`v0.0.44 <https://slurm.schedmd.com/rest_clients.html#data_parser_lifecycle>`__) |
++--------------------------------------------------------------------------------+---------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+
+Please refer to the following lifecycle documents for support guidance:
+
+- `Kubernetes <https://kubernetes.io/releases/#release-history>`__
+- `Slurm <https://slurm.schedmd.com/upgrades.html#compatibility_window>`__
 
 Quick Start
 -----------
