@@ -534,14 +534,14 @@ func (r *NodeSetReconciler) syncCordon(
 			r.eventRecorder.Eventf(nodeset, pod, corev1.EventTypeNormal, NodeCordonReason, "Cordon",
 				"Cordoning Pod %s: Kubernetes node %s was cordoned", klog.KObj(pod), name)
 
-			if err := r.makePodCordonAndDrain(ctx, nodeset, pod, reason); err != nil {
+			if err := r.makePodCordonAndDrain(ctx, nodeset, pod, reason, false); err != nil {
 				return err
 			}
 
 		// If pod is cordoned, drain the Slurm node
 		case podIsCordoned:
 			reason := fmt.Sprintf("Pod (%s) was cordoned", klog.KObj(pod))
-			if err := r.slurmControl.MakeNodeDrain(ctx, nodeset, pod, reason); err != nil {
+			if err := r.makePodCordonAndDrain(ctx, nodeset, pod, reason, false); err != nil {
 				return err
 			}
 
@@ -1282,7 +1282,7 @@ func (r *NodeSetReconciler) processCondemned(
 		durationStore.Push(nodesetKey, 30*time.Second)
 		r.expectations.DeletionObserved(logger, nodesetKey, kubecontroller.PodKey(pod))
 		reason := fmt.Sprintf("Pod (%s) is pending termination for scale-in", klog.KObj(pod))
-		return r.makePodCordonAndDrain(ctx, nodeset, pod, reason)
+		return r.makePodCordonAndDrain(ctx, nodeset, pod, reason, true)
 	}
 
 	logger.V(2).Info("NodeSet Pod is terminating for scale-in",
@@ -1381,6 +1381,7 @@ func (r *NodeSetReconciler) makePodCordonAndDrain(
 	nodeset *slinkyv1beta1.NodeSet,
 	pod *corev1.Pod,
 	reason string,
+	overrideReason bool,
 ) error {
 	if err := r.makePodCordon(ctx, pod); err != nil {
 		return err
@@ -1390,7 +1391,7 @@ func (r *NodeSetReconciler) makePodCordonAndDrain(
 		reason = "unknown"
 	}
 
-	if err := r.slurmControl.MakeNodeDrain(ctx, nodeset, pod, reason); err != nil {
+	if err := r.slurmControl.MakeNodeDrain(ctx, nodeset, pod, reason, overrideReason); err != nil {
 		return err
 	}
 
