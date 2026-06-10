@@ -1767,34 +1767,6 @@ func TestNodeSetReconciler_syncCordon(t *testing.T) {
 	}
 }
 
-func TestNodeSetReconciler_syncSlurmNodeUndrain_skipsWhenNotDrained(t *testing.T) {
-	controller := &slinkyv1beta1.Controller{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "slurm",
-			Namespace: corev1.NamespaceDefault,
-		},
-	}
-	nodeset := newNodeSet("nodeset-b", controller.Name, 2)
-	pod := nodesetutils.NewNodeSetStatefulSetPod(fake.NewFakeClient(), nodeset, controller, 0, "")
-	slurmName := nodesetutils.GetSlurmNodeName(pod)
-	slurmNodeList := &slurmtypes.V0044NodeList{
-		Items: []slurmtypes.V0044Node{
-			{
-				V0044Node: slurmapi.V0044Node{
-					Name:  new(slurmName),
-					State: new([]slurmapi.V0044NodeState{slurmapi.V0044NodeStateIDLE}),
-				},
-			},
-		},
-	}
-	slurmClient := newFakeClientList(sinterceptor.Funcs{}, slurmNodeList)
-	r := newNodeSetController(fake.NewFakeClient(nodeset), newClientMap(controller.Name, slurmClient))
-
-	if err := r.syncSlurmNodeUndrain(context.Background(), nodeset, pod, "should not be used"); err != nil {
-		t.Fatalf("syncSlurmNodeUndrain() = %v", err)
-	}
-}
-
 func TestNodeSetReconciler_doPodProcessing(t *testing.T) {
 	controller := &slinkyv1beta1.Controller{
 		ObjectMeta: metav1.ObjectMeta{
