@@ -139,3 +139,27 @@ Returns the merged nodeset as YAML, or the original nodeset when patch is empty.
   {{- $nodeset | toYaml -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+slurm.nodeset.applyVendorPatches
+
+Apply vendor nodeset patches in a fixed order.
+
+Vendor contract:
+- Implement "vendor.<vendor>.nodesetPatch" accepting (dict "root" $ "key" $key "nodeset" $nodeset)
+- Return a YAML fragment in nodeset values shape (podSpec, slurmd, metadata, ...)
+- Return empty output when the patch does not apply
+- Keep validation and tpl context setup inside the vendor helper
+- Register new vendors below in merge order
+*/}}
+{{- define "slurm.nodeset.applyVendorPatches" -}}
+{{- $root := .root -}}
+{{- $key := .key -}}
+{{- $nodeset := .nodeset -}}
+{{- $ctx := dict "root" $root "key" $key "nodeset" $nodeset -}}
+
+{{/* NVIDIA DCGM */}}
+{{- $nodeset = include "slurm.nodeset.applyPatch" (dict "nodeset" $nodeset "patchYaml" (include "vendor.dcgm.nodesetPatch" $ctx)) | fromYaml -}}
+
+{{- $nodeset | toYaml -}}
+{{- end -}}

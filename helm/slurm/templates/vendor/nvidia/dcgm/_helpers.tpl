@@ -24,11 +24,30 @@ Get the DCGM job mapping directory
 Check if a nodeset has GPU resources allocated
 */}}
 {{- define "vendor.dcgm.nodesetHasGPU" -}}
-{{- $limits := . | dig "resources" "limits" dict -}}
-{{- if index $limits "nvidia.com/gpu" -}}
-nvidia.com/gpu
+{{- $nodeset := . -}}
+{{- $device := "nvidia.com/gpu" -}}
+
+{{- $slurmd := $nodeset.slurmd | default dict -}}
+{{- $podSpec := $nodeset.podSpec | default dict -}}
+{{- $slurmdLimits := $slurmd | dig "resources" "limits" dict -}}
+{{- $slurmdRequests := $slurmd | dig "resources" "requests" dict -}}
+{{- $podLimits := $podSpec | dig "resources" "limits" dict -}}
+{{- $podRequests := $podSpec | dig "resources" "requests" dict -}}
+{{- if or (index $slurmdLimits $device) (index $slurmdRequests $device) (index $podLimits $device) (index $podRequests $device) -}}
+  {{- print $device -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+Return a nodeset values patch for DCGM, or empty when not applicable.
+*/}}
+{{- define "vendor.dcgm.nodesetPatch" -}}
+{{- $root := .root -}}
+{{- $nodeset := .nodeset -}}
+{{- if and (include "vendor.dcgm.enabled" $root) (include "vendor.dcgm.nodesetHasGPU" $nodeset) -}}
+  {{- tpl ($root.Files.Get "_vendor/nvidia/dcgm/snippets/nodeset.yaml") $root -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Generate DCGM prolog configmap name.
