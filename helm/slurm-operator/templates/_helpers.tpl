@@ -62,7 +62,7 @@ imagePullSecrets:
 {{/*
 Format image reference from image object.
 */}}
-{{- define "format-image" -}}
+{{- define "slurm.format-image" -}}
 {{- $spec := index . 0 -}}
 {{- $defaultTag := index . 1 -}}
 {{- if kindIs "string" $spec -}}

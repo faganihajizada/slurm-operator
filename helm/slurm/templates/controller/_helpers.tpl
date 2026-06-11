@@ -32,7 +32,7 @@ Determine controller extraConf
 {{- if .Values.controller.extraConf -}}
   {{- $extraConf = splitList "\n" .Values.controller.extraConf -}}
 {{- else if .Values.controller.extraConfMap -}}
-  {{- $extraConf = (include "_toList" .Values.controller.extraConfMap) | splitList ";" -}}
+  {{- $extraConf = (include "slurm._toList" .Values.controller.extraConfMap) | splitList ";" -}}
 {{- end -}}
 {{- $nodesetList := list "ALL" -}}
 {{- range $nodesetName, $nodeset := .Values.nodesets -}}
@@ -63,7 +63,7 @@ Determine controller extraConf
     {{- if $part | dig "config" nil -}}
       {{- $partConfig = list ($part | dig "config" "") -}}
     {{- else if $part | dig "configMap" dict -}}
-      {{- $partConfig = (include "_toList" ($part | dig "configMap" dict)) | splitList ";" -}}
+      {{- $partConfig = (include "slurm._toList" ($part | dig "configMap" dict)) | splitList ";" -}}
     {{- end -}}
     {{- $partLine = append $partLine (join " " $partConfig) -}}
     {{- $extraConf = append $extraConf (join " " $partLine) -}}

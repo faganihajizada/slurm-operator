@@ -46,8 +46,8 @@ spec:
   {{- end }}{{- /* if (include "slurm.accounting.extraConf" .) */}}
   slurmdbd:
     {{- $_ := set $slurmdbd "imagePullPolicy" (get $slurmdbd "imagePullPolicy" | default $.Values.imagePullPolicy) -}}
-    {{- include "format-container" $slurmdbd | nindent 4 }}
-  {{- include "format-podTemplate" $podTemplate | nindent 2 }}
+    {{- include "slurm.format-container" $slurmdbd | nindent 4 }}
+  {{- include "slurm.format-podTemplate" $podTemplate | nindent 2 }}
   {{- with .Values.accounting.storageConfig }}
   storageConfig:
     {{- toYaml . | nindent 4 }}
