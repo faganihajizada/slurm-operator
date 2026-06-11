@@ -1,2 +1,0 @@
-- name: aperture-devices
-  mountPath: /dev/aperture_devices

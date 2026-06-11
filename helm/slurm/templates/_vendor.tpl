@@ -161,5 +161,8 @@ Vendor contract:
 {{/* NVIDIA DCGM */}}
 {{- $nodeset = include "slurm.nodeset.applyPatch" (dict "nodeset" $nodeset "patchYaml" (include "slurm.vendor.nvidia.dcgm.nodesetPatch" $ctx)) | fromYaml -}}
 
+{{/* Google A3 Mega */}}
+{{- $nodeset = include "slurm.nodeset.applyPatch" (dict "nodeset" $nodeset "patchYaml" (include "slurm.vendor.google.a3mega.nodesetPatch" $ctx)) | fromYaml -}}
+
 {{- $nodeset | toYaml -}}
 {{- end -}}
