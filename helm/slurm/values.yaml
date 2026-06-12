@@ -91,7 +91,7 @@ configFiles: {}
   #   ConstrainSwapSpace=yes
   # Ref: https://slurm.schedmd.com/gres.conf.html
   # gres.conf: |
-  #   AutoDetect=nvidia
+  #   AutoDetect=Full
   # Ref: https://slurm.schedmd.com/mpi.conf.html
   # mpi.conf: |
   #   PMIxDebug=0
@@ -248,12 +248,27 @@ controller:
   # If `extraConf` is not empty, it takes precedence.
   # Ref: https://slurm.schedmd.com/slurm.conf.html
   extraConfMap: {}
+    # AccountingStorageTRES:
+    #   - gres/gpu
     # DebugFlags: []
+    # GresTypes:
+    #   - gpu
+    # JobAcctGatherType: jobacct_gather/cgroup
     # MinJobAge: 2
+    # ProctrackType: proctrack/cgroup
+    # PrologFlags:
+    #   - Contain
+    # ReturnToService: 2
     # SchedulerParameters: []
+    # SlurmctldDebug: debug2
+    # SlurmctldParameters:
+    #   - enable_stepmgr
     # SlurmctldDebug: debug2
     # SlurmSchedLogLevel: 1
     # SlurmdDebug: debug2
+    # TaskPlugin:
+    #   - task/affinity
+    #   - task/cgroup
   # -- Labels and annotations.
   # Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
   metadata: {}
@@ -674,6 +689,9 @@ nodesetDefaults:
   pruneSlurmNodeRecords: Never
   # -- How many places to pad with zeroes when constructing the pod ordinal.
   ordinalPadding: 0
+  # -- Indicates these NodeSet Pods can reside on the same Kubernetes Node (no anti-affinity).
+  # WARNING: This option is **NOT** recommended for production usage.
+  oversubscribeNode: false
   # slurmd container configurations.
   slurmd:
     # -- (string \| object) The image to use.

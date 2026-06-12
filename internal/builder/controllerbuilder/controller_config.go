@@ -25,7 +25,6 @@ import (
 const (
 	SlurmConfFile  = "slurm.conf"
 	CgroupConfFile = "cgroup.conf"
-	GresConfFile   = "gres.conf"
 )
 
 func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Controller) (*corev1.ConfigMap, error) {
@@ -61,16 +60,11 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 		}
 		configFilesList.Items = append(configFilesList.Items, *cm)
 	}
-	cgroupEnabled := true
 	hasCgroupConfFile := false
-	hasGresConfFile := false
 	for _, configMap := range configFilesList.Items {
-		if contents, ok := configMap.Data[CgroupConfFile]; ok {
+		if _, ok := configMap.Data[CgroupConfFile]; ok {
 			hasCgroupConfFile = true
-			cgroupEnabled = isCgroupEnabled(contents)
-		}
-		if _, ok := configMap.Data[GresConfFile]; ok {
-			hasGresConfFile = true
+			break
 		}
 	}
 
@@ -145,14 +139,11 @@ func (b *ControllerBuilder) BuildControllerConfig(controller *slinkyv1beta1.Cont
 				controller, accounting, nodesetList,
 				prologScripts, epilogScripts,
 				prologSlurmctldScripts, epilogSlurmctldScripts,
-				cgroupEnabled),
+			),
 		},
 	}
 	if !hasCgroupConfFile {
 		opts.Data[CgroupConfFile] = buildCgroupConf()
-	}
-	if !hasGresConfFile {
-		opts.Data[GresConfFile] = buildGresConf()
 	}
 
 	return b.CommonBuilder.BuildConfigMap(opts, controller)
@@ -165,16 +156,12 @@ func buildSlurmConf(
 	nodesetList *slinkyv1beta1.NodeSetList,
 	prologScripts, epilogScripts []string,
 	prologSlurmctldScripts, epilogSlurmctldScripts []string,
-	cgroupEnabled bool,
 ) string {
 	mergeConfig := map[string][]string{
-		"SlurmctldParameters": func() []string {
-			params := []string{"enable_configless", "reconfig_on_restart"}
-			if cgroupEnabled {
-				params = append(params, "enable_stepmgr")
-			}
-			return params
-		}(),
+		"SlurmctldParameters": {
+			"enable_configless",
+			"reconfig_on_restart",
+		},
 		"AuthInfo": {
 			common.AuthInfo,
 		},
@@ -201,16 +188,13 @@ func buildSlurmConf(
 	conf.AddProperty(config.NewProperty("SlurmdUser", common.SlurmdUser))
 	conf.AddProperty(config.NewProperty("SlurmdPort", common.SlurmdPort))
 	conf.AddProperty(config.NewProperty("SlurmdSpoolDir", common.SlurmdSpoolDir))
-	conf.AddProperty(config.NewProperty("ReturnToService", 2))
-	conf.AddProperty(config.NewProperty("MaxNodeCount", 1024))
-	conf.AddProperty(config.NewProperty("GresTypes", "gpu"))
+	conf.AddProperty(config.NewProperty("MaxNodeCount", 1024)) // A non-zero value is required.
 
 	conf.AddProperty(config.NewPropertyRaw("#"))
 	conf.AddProperty(config.NewPropertyRaw("### LOGGING ###"))
 	conf.AddProperty(config.NewProperty("SlurmctldLogFile", common.SlurmctldLogFilePath))
 	conf.AddProperty(config.NewProperty("SlurmSchedLogFile", common.SlurmctldLogFilePath))
 	conf.AddProperty(config.NewProperty("SlurmdLogFile", common.SlurmdLogFilePath))
-	conf.AddProperty(config.NewProperty("LogTimeFormat", common.LogTimeFormat))
 
 	conf.AddProperty(config.NewPropertyRaw("#"))
 	conf.AddProperty(config.NewPropertyRaw("### PLUGINS & PARAMETERS ###"))
@@ -220,14 +204,6 @@ func buildSlurmConf(
 	conf.AddProperty(config.NewProperty("AuthAltParameters", strings.Join(mergeConfig["AuthAltParameters"], ",")))
 	conf.AddProperty(config.NewProperty("AuthInfo", strings.Join(mergeConfig["AuthInfo"], ",")))
 	conf.AddProperty(config.NewProperty("SlurmctldParameters", strings.Join(mergeConfig["SlurmctldParameters"], ",")))
-	if cgroupEnabled {
-		conf.AddProperty(config.NewProperty("ProctrackType", "proctrack/cgroup"))
-		conf.AddProperty(config.NewProperty("PrologFlags", "Contain"))
-		conf.AddProperty(config.NewProperty("TaskPlugin", "task/affinity,task/cgroup"))
-	} else {
-		conf.AddProperty(config.NewProperty("ProctrackType", "proctrack/linuxproc"))
-		conf.AddProperty(config.NewProperty("TaskPlugin", "task/affinity"))
-	}
 
 	metricsEnabled := controller.Spec.Metrics.Enabled
 	if metricsEnabled {
@@ -240,15 +216,8 @@ func buildSlurmConf(
 		conf.AddProperty(config.NewProperty("AccountingStorageType", "accounting_storage/slurmdbd"))
 		conf.AddProperty(config.NewProperty("AccountingStorageHost", accounting.ServiceKey().Name))
 		conf.AddProperty(config.NewProperty("AccountingStoragePort", common.SlurmdbdPort))
-		conf.AddProperty(config.NewProperty("AccountingStorageTRES", "gres/gpu"))
-		if cgroupEnabled {
-			conf.AddProperty(config.NewProperty("JobAcctGatherType", "jobacct_gather/cgroup"))
-		} else {
-			conf.AddProperty(config.NewProperty("JobAcctGatherType", "jobacct_gather/linux"))
-		}
 	} else {
 		conf.AddProperty(config.NewProperty("AccountingStorageType", "accounting_storage/none"))
-		conf.AddProperty(config.NewProperty("JobAcctGatherType", "jobacct_gather/none"))
 	}
 
 	if snippet := buildPrologEpilogSlurmctldConf(prologSlurmctldScripts, epilogSlurmctldScripts); snippet != "" {
@@ -375,15 +344,6 @@ func isCgroupEnabled(cgroupConf string) bool {
 	r := regexp.MustCompile(`(?im)^CgroupPlugin=disabled`)
 	found := r.FindStringSubmatch(cgroupConf)
 	return len(found) == 0
-}
-
-// https://slurm.schedmd.com/gres.conf.html
-func buildGresConf() string {
-	conf := config.NewBuilder()
-
-	conf.AddProperty(config.NewProperty("AutoDetect", "nvidia"))
-
-	return conf.Build()
 }
 
 // BuildControllerConfigExternal returns a minimal slurm.conf for slurmrestd (lacks configless).

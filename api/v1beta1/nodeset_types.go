@@ -136,6 +136,12 @@ type NodeSetSpec struct {
 	// +kubebuilder:validation:Enum=Never;NodeNotFound
 	// +kubebuilder:default:=Never
 	PruneSlurmNodeRecords NodeSetPruneSlurmNodeRecordType `json:"pruneSlurmNodeRecords,omitempty"`
+
+	// OversubscribeNode indicates these NodeSet Pods can reside on the same Kubernetes Node (no anti-affinity).
+	// WARNING: This option is **NOT** recommended for production usage.
+	// +optional
+	// +default:=false
+	OversubscribeNode bool `json:"oversubscribeNode,omitempty"`
 }
 
 // ScalingModeType is a string enumeration of how a NodeSet scales its pods.
