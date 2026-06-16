@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -134,6 +135,10 @@ func (r *NodeSetReconciler) syncNodeSetStatus(
 	}
 	newStatus.Conditions = append(newStatus.Conditions, nodeset.Status.Conditions...)
 
+	if err := r.applyReservationCondition(ctx, nodeset, &newStatus.Conditions); err != nil {
+		return err
+	}
+
 	if apiequality.Semantic.DeepEqual(nodeset.Status, newStatus) {
 		logger.V(2).Info("NodeSet Status has not changed, skipping status update", "status", nodeset.Status)
 		return nil
@@ -212,6 +217,122 @@ func (r *NodeSetReconciler) calculateReplicaStatus(
 		status.Desired = int32(desiredNodes)
 	}
 	return status, nil
+}
+
+// calculateReservationCondition returns a condition that indicates the status of the reservation
+// associated with the NodeSet.
+//
+// NodeSetConditionReservationCreated conveys three pieces of information about a NodeSet's reservation:
+//
+//   - Whether Slurm-operator has created the reservation in it's current configuration as defined in the NodeSet spec,
+//     regardless of whether or not that reservation has since been reaped by Slurm or deleted by a user. This is crucial
+//     because reservationExists alone is insufficient to determine whether or not a one-off reservation has been created,
+//     executed to completion, and was reaped by slurm - resulting in errors if we attempt to recreate based on
+//     reservationExists alone. This piece of information is conveyed by the presence of the condition.
+//
+//   - Whether the reservation presently defined in the NodeSet spec exists in the Slurm cluster. This satisfies the
+//     following cases:
+//
+//   - If a reservation was created by Slurm-operator per the spec and was reaped by Slurm after completion, we must not
+//     attempt to recreate it. In order to convey this state, the Condition will be present on a NodeSet with
+//     status = true and LastTransitionTime will match the start time defined in the NodeSet spec.
+//
+//   - If a reoccuring reservation was created by Slurm-operator per the spec, the first occurrence of the reservation completes,
+//     and the start time of the reservation was then updated by Slurm to the next iteration, we must respect the start time
+//     set by Slurm. In this case, we must not attempt to re-create the reservation with the original time in the NodeSet spec
+//     and must instead confirm that the original start time of the reoccuring reservation matches what was set in our NodeSet
+//     spec. In order to convey this state, the Condition will be present on a NodeSet with status = true and LastTransitionTime
+//     will match the start time defined in the NodeSet spec.
+//
+//   - If a reoccuring or one-off reservation was created by Slurm-operator per the spec, and the user updates the
+//     reservation's start time in the NodeSet spec, we must attempt to re-create the reservation. To convey this state,
+//     the condition will be present on a NodeSet with status = false and LastTransitionTime will match the new start
+//     time as defined in the NodeSet spec.
+func (r *NodeSetReconciler) calculateReservationCondition(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, conditions []metav1.Condition) (*metav1.Condition, error) {
+	reservationExists, err := r.slurmControl.CheckReservationForNodeSet(ctx, nodeset)
+	if err != nil {
+		return nil, err
+	}
+
+	nodesetIsScheduled := nodeset.Spec.UpdateStrategy.Type == slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+	nodeSetHasReplicas := ptr.Deref(nodeset.Spec.Replicas, defaults.DefaultNodeSetReplicas) > 0
+
+	if !nodesetIsScheduled || !nodeSetHasReplicas ||
+		(reservationExists && !nodeset.DeletionTimestamp.IsZero()) {
+		return nil, nil //nolint:nilnil
+	}
+
+	reservationCondition := meta.FindStatusCondition(conditions, slurmconditions.NodeSetConditionReservationCreated)
+
+	if reservationCondition != nil {
+		switch {
+		// If the condition already exists, but the status is false
+		case reservationExists && reservationCondition.Status != metav1.ConditionTrue:
+			condition := &metav1.Condition{
+				Type:               slurmconditions.NodeSetConditionReservationCreated,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime,
+				ObservedGeneration: 1,
+				Reason:             "Created",
+			}
+			return condition, nil
+
+		// If the condition already exists, but the reservation start time does not match
+		case reservationExists && reservationCondition.LastTransitionTime != nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime:
+			condition := &metav1.Condition{
+				Type:               slurmconditions.NodeSetConditionReservationCreated,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime,
+				ObservedGeneration: reservationCondition.ObservedGeneration + 1,
+				Reason:             "Created",
+			}
+			return condition, nil
+
+		// If the reservation exists, the condition should still exist
+		// so that we can distinguish between a one-off reservation that has not yet been created
+		// (that we must create) and one that has been created and reaped by slurm (which we must not create)
+		case !reservationExists && reservationCondition.Status == metav1.ConditionTrue:
+			condition := &metav1.Condition{
+				Type:               slurmconditions.NodeSetConditionReservationCreated,
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime,
+				ObservedGeneration: reservationCondition.ObservedGeneration + 1,
+				Reason:             "NotExists",
+			}
+			return condition, nil
+		}
+	}
+
+	// If the condition does not exist already
+	if reservationExists {
+		condition := &metav1.Condition{
+			Type:               slurmconditions.NodeSetConditionReservationCreated,
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime,
+			ObservedGeneration: 1,
+			Reason:             "Created",
+		}
+		return condition, nil
+	}
+
+	return nil, nil //nolint:nilnil
+}
+
+func (r *NodeSetReconciler) applyReservationCondition(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, conditions *[]metav1.Condition) error {
+	conds := ptr.Deref(conditions, []metav1.Condition{})
+
+	reservationCondition, err := r.calculateReservationCondition(ctx, nodeset, conds)
+	if err != nil {
+		return err
+	}
+
+	if reservationCondition != nil {
+		meta.SetStatusCondition(conditions, *reservationCondition)
+	} else {
+		meta.RemoveStatusCondition(conditions, slurmconditions.NodeSetConditionReservationCreated)
+	}
+
+	return nil
 }
 
 // calculateOrdinalToNode builds the ordinal to node pinning map.
@@ -321,7 +442,7 @@ func applySlurmPodConditions(status *corev1.PodStatus, desired []corev1.PodCondi
 	}
 	filtered := status.Conditions[:0]
 	for _, c := range status.Conditions {
-		if strings.HasPrefix(string(c.Type), slurmconditions.StatePrefix) {
+		if strings.HasPrefix(string(c.Type), slurmconditions.PodStatePrefix) {
 			if !desiredTypes.Has(c.Type) {
 				continue // drop stale Slurm condition
 			}

@@ -52,6 +52,10 @@ const (
 	ScalingUpReason = "ScalingUp"
 	// ScalingDownReason is added to an event when pods are being deleted to reach the desired replica count.
 	ScalingDownReason = "ScalingDown"
+	// SyncFailedReason is added to an event when a sync sub-step fails.
+	SyncFailedReason = "SyncFailed"
+	// SyncFinalizerFailedReason is added to an event when a sync finalizer sub-step fails.
+	SyncFinalizerFailedReason = "SyncFinalizerFailed"
 	// NodeCordonReason is added to an event when a pod is cordoned due to its Kubernetes node being cordoned.
 	NodeCordonReason = "NodeCordon"
 	// SlurmNodeNotRegisteredReason is added to an event when a pod is deleted because its Slurm node is not registered.

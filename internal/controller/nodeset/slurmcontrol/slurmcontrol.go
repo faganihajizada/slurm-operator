@@ -5,6 +5,7 @@ package slurmcontrol
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -26,6 +28,7 @@ import (
 	slurmtypes "github.com/SlinkyProject/slurm-client/pkg/types"
 
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
+	"github.com/SlinkyProject/slurm-operator/internal/builder/common"
 	"github.com/SlinkyProject/slurm-operator/internal/clientmap"
 	nodesetutils "github.com/SlinkyProject/slurm-operator/internal/controller/nodeset/utils"
 	"github.com/SlinkyProject/slurm-operator/internal/utils/podinfo"
@@ -58,6 +61,14 @@ type SlurmControlInterface interface {
 	GetNodeDeadlines(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod) (*timestore.TimeStore, error)
 	// GetNodesForPods returns a list of Slurm nodes associated with the NodeSet pods.
 	GetNodesForPods(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod) ([]string, bool, error)
+	// CheckReservationForNodeSet returns true when a reservation exists for a NodeSet
+	CheckReservationForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) (bool, error)
+	// GetPodsUnderReservation returns a sublist of pods whose Slurm nodes are under an active MAINT reservation
+	GetPodsUnderReservation(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod) ([]*corev1.Pod, error)
+	// SyncReservationForNodeSet creates a reservation for a NodeSet for the Scheduled update strategy
+	SyncReservationForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod) error
+	// DeleteReservationForNodeSet deletes a reservation associated with a NodeSet for the Scheduled update strategy
+	DeleteReservationForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error
 	// GetDefunctNodesForNodeSet returns defunct-node candidates owned by this NodeSet.
 	GetDefunctNodesForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) ([]DefunctNode, bool, error)
 	// DeleteNode deletes a Slurm node by name.
@@ -704,6 +715,422 @@ func (r *realSlurmControl) DeleteNode(ctx context.Context, nodeset *slinkyv1beta
 	}
 
 	return nil
+}
+
+// CheckReservationForNodeSet returns the state of the reservation
+// for the given nodeset in Slurm.
+func (r *realSlurmControl) CheckReservationForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	slurmClient := r.lookupClient(nodeset)
+	if slurmClient == nil {
+		logger.V(2).Info("no client for nodeset, cannot do CheckReservationForNodeSet()")
+		return false, nil
+	}
+
+	emptyReservation := new(slurmtypes.V0044ReservationInfo)
+	reservation := new(slurmtypes.V0044ReservationInfo)
+
+	key := slurmobject.ObjectKey("SlurmOperatorMaint-" + nodeset.Name)
+	if err := slurmClient.Get(ctx, key, reservation); err != nil {
+		if tolerateError(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+
+	if !apiequality.Semantic.DeepEqual(reservation, emptyReservation) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// GetPodsUnderReservation() returns a sublist of pods corresponding to Slurm nodes actively under
+// a MAINT reservation
+func (r *realSlurmControl) GetPodsUnderReservation(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod) ([]*corev1.Pod, error) {
+	logger := log.FromContext(ctx)
+
+	var podsUnderReservation []*corev1.Pod
+
+	slurmClient := r.lookupClient(nodeset)
+	if slurmClient == nil {
+		logger.V(2).Info("no client for nodeset, cannot do GetPodsUnderReservation()")
+		return nil, nil
+	}
+
+	reservation := new(slurmtypes.V0044ReservationInfo)
+	key := slurmobject.ObjectKey("SlurmOperatorMaint-" + nodeset.Name)
+	if err := slurmClient.Get(ctx, key, reservation); !tolerateError(err) {
+		return nil, err
+	}
+	if reservation.Name == nil {
+		return nil, nil
+	}
+
+	// For each pod, determine if the associated Slurm node is actively under the NodeSet's reservation
+	for _, pod := range pods {
+		nodename := nodesetutils.GetSlurmNodeName(pod)
+
+		slurmNode := new(slurmtypes.V0044Node)
+		key := slurmobject.ObjectKey(nodename)
+		if err := slurmClient.Get(ctx, key, slurmNode); !tolerateError(err) {
+			return nil, err
+		}
+		if slurmNode.State != nil && slurmNode.Reservation != nil {
+			if slurmNode.GetStateAsSet().Has(slurmapi.V0044NodeStateMAINTENANCE) && *slurmNode.Reservation == *reservation.Name {
+				podsUnderReservation = append(podsUnderReservation, pod)
+			}
+		}
+	}
+
+	return podsUnderReservation, nil
+}
+
+// DeleteReservationForNodeSet() deletes the reservation associated with a NodeSet
+func (r *realSlurmControl) DeleteReservationForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet) error {
+	logger := log.FromContext(ctx)
+
+	slurmClient := r.lookupClient(nodeset)
+	if slurmClient == nil {
+		logger.V(2).Info("no client for nodeset, cannot do DeleteReservationForNodeSet()")
+		return nil
+	}
+
+	reservation := new(slurmtypes.V0044ReservationInfo)
+	key := slurmobject.ObjectKey("SlurmOperatorMaint-" + nodeset.Name)
+	if err := slurmClient.Get(ctx, key, reservation); !tolerateError(err) {
+		return err
+	}
+
+	if reservation.Name == nil {
+		return nil
+	}
+
+	if err := slurmClient.Delete(ctx, reservation); !tolerateError(err) {
+		return err
+	}
+
+	return nil
+}
+
+// SyncReservationForNodeSet() creates and updates the reservation associated with a NodeSet
+func (r *realSlurmControl) SyncReservationForNodeSet(ctx context.Context, nodeset *slinkyv1beta1.NodeSet, pods []*corev1.Pod) error {
+	logger := log.FromContext(ctx)
+
+	slurmClient := r.lookupClient(nodeset)
+	if slurmClient == nil {
+		logger.V(2).Info("no client for nodeset, cannot do SyncReservationForNodeSet()")
+		return nil
+	}
+
+	name := "SlurmOperatorMaint-" + nodeset.Name
+
+	reservationDesc, newReservationInfo, err := formatReservationForSchedule(name, nodeset.Spec.UpdateStrategy.ScheduledUpdate)
+	if err != nil {
+		return fmt.Errorf("SyncReservationForNodeSet() failed to format Reservation=%s for NodeSet=%s with error=%w", *reservationDesc.Name, nodeset.Name, err)
+	}
+
+	slurmNodes, ok, err := r.GetNodesForPods(ctx, nodeset, pods)
+	if err != nil {
+		return err
+	} else if !ok {
+		return nil // skip, results cannot be used
+	}
+	slurmNodeHostList, err := hostlist.Compress(slurmNodes)
+	if err != nil {
+		return err
+	}
+	reservationDesc.NodeList = &slurmapi.V0044HostlistString{slurmNodeHostList}
+	newReservationInfo.NodeList = ptr.To(slurmNodeHostList)
+
+	coreNewReservationInfo := slurmtypes.V0044ReservationInfo{
+		V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+			Name:     newReservationInfo.Name,
+			Flags:    newReservationInfo.Flags,
+			NodeList: newReservationInfo.NodeList,
+			Users:    newReservationInfo.Users,
+		},
+	}
+
+	// If a reservation already exists for this NodeSet, get information to determine what actions to take
+	var coreOldReservationInfo slurmtypes.V0044ReservationInfo
+	var reservationActive bool
+
+	oldReservationInfo := new(slurmtypes.V0044ReservationInfo)
+	key := slurmobject.ObjectKey("SlurmOperatorMaint-" + nodeset.Name)
+	if err := slurmClient.Get(ctx, key, oldReservationInfo); !tolerateError(err) {
+		return err
+	}
+
+	// We need to append the output-only flag SPEC_NODES to our newReservationInfo, to match what we
+	// expect from a populated oldReservationInfo
+	specNodeFlag := []slurmapi.V0044ReservationInfoFlags{slurmapi.V0044ReservationInfoFlagsSPECNODES}
+	if coreNewReservationInfo.Flags != nil {
+		coreNewReservationInfo.Flags = ptr.To(append(*coreNewReservationInfo.Flags, specNodeFlag...))
+		// We need to sort the slice of flags in order for the comparison that gates updates to evaluate properly
+		coreNewReservationInfo.Flags = ptr.To(set.New(*coreNewReservationInfo.Flags...).SortedList())
+	}
+
+	var startTimeChanged bool
+	emptyReservationInfo := new(slurmtypes.V0044ReservationInfo)
+
+	slurmReservationExists := !apiequality.Semantic.DeepEqual(oldReservationInfo, emptyReservationInfo)
+	created, startTime := getReservationStatus(nodeset)
+
+	switch {
+	case slurmReservationExists && created:
+		// coreOldReservationInfo is used to compare key values of the new and old reservations
+		// We rely on startTimeChanged instead of comparing the StartTime's directly to ensure
+		// that the automatic time change on reservation reoccurance does not cause constant,
+		// unnecessary reservation updates
+		coreOldReservationInfo = slurmtypes.V0044ReservationInfo{
+			V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+				Name:     oldReservationInfo.Name,
+				Flags:    oldReservationInfo.Flags,
+				NodeList: oldReservationInfo.NodeList,
+				Users:    oldReservationInfo.Users,
+			},
+		}
+
+		if coreOldReservationInfo.Flags != nil {
+			// We need to sort the slice of flags in order for the comparison that gates updates to evaluate properly
+			coreOldReservationInfo.Flags = ptr.To(set.New(*coreOldReservationInfo.Flags...).SortedList())
+		}
+
+		reservationActive = isReservationActive(*oldReservationInfo)
+		startTimeChanged = !nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime.Time.Equal(startTime)
+
+		// We should honor existing start times for reoccuring reservations, Slurm updates them for us.
+		// This approach is required until we have a slurmapi.V0044ReservationInfo.Status field from Slurm
+		// due to the scenario outlined below:
+		//
+		// 1. Reservation has not yet occurred. Slurm's reservation record matches the NodeSet object's StartTime.
+		// 2. Reservation is ACTIVE. Reservation Updates are skipped during NodeSet reconciliation because
+		//    of this.
+		// 3. Reservation completes. Because this is a reoccuring reservation, Slurm automatically updates the
+		//    reservation's StartTime for the next occurrence of the reservation (in the future).
+		// 4. NodeSet reconciliation occurs and this function is called. The apiequality.Semantic.DeepEqual()
+		//    call that is used in order to compare the reservation as defined in the NodeSet object and the
+		//    reservation as it exists in Slurm will now evaluate to false, triggering a reservation update.
+		//    This update will fail because even with the FORCE_START flag set, Slurm will not permit a start time
+		//    to be in the past for a reoccuring reservation once the StartTime has been set by Slurm after the
+		//    first occurrence.
+		oldStartTime := time.Unix(*oldReservationInfo.StartTime.Number, 0)
+		if oldStartTime.After(time.Unix(*reservationDesc.StartTime.Number, 0)) {
+			oldResIsReoccuring := reservationHasFlags(*oldReservationInfo, reoccuringInfoFlags, true)
+			newResIsReoccuring := reservationHasFlags(newReservationInfo, reoccuringInfoFlags, true)
+			if (oldResIsReoccuring && newResIsReoccuring) && !startTimeChanged {
+				newStartTime := oldStartTime.Unix()
+				reservationDesc.StartTime.Number = &newStartTime
+			}
+		}
+
+		// Slurm will not allow most field updates for active reservations
+		if !reservationActive && (!apiequality.Semantic.DeepEqual(coreNewReservationInfo, coreOldReservationInfo) || startTimeChanged) {
+
+			newReservationInfo.Name = oldReservationInfo.Name
+
+			err = slurmClient.Update(ctx, &newReservationInfo, reservationDesc)
+			if !tolerateError(err) {
+				return fmt.Errorf("SyncReservationForNodeSet() failed to Update ReservationName=%s for NodeSet=%s with error=%w", ptr.Deref(reservationDesc.Name, name), nodeset.Name, err)
+			}
+
+			return nil
+		}
+
+		// Adding and removing nodes from an active reservation is permitted by Slurm, this should be done to maintain sync
+		if reservationActive && !isNodeListMatch(ptr.Deref(oldReservationInfo, slurmtypes.V0044ReservationInfo{}), newReservationInfo) {
+			err := updateReservationNodes(ctx, slurmClient, oldReservationInfo, reservationDesc.NodeList)
+			if !tolerateError(err) {
+				return fmt.Errorf("SyncReservationForNodeSet() failed to Update Reservation=%s for NodeSet=%s with error=%w", *reservationDesc.Name, nodeset.Name, err)
+			}
+		}
+
+		return nil
+
+	case !slurmReservationExists && !created:
+		forceStart := reservationHasFlags(newReservationInfo, []slurmapi.V0044ReservationInfoFlags{slurmapi.V0044ReservationInfoFlagsFORCESTART}, true)
+		pastStartTime := nodeset.Spec.UpdateStrategy.ScheduledUpdate.StartTime.Time.Before(time.Now())
+
+		if forceStart || !pastStartTime {
+			err = slurmClient.Create(ctx, &newReservationInfo, reservationDesc)
+			if !tolerateError(err) {
+				return fmt.Errorf("SyncReservationForNodeSet() failed to Create ReservationName=%s for NodeSet=%s with error=%w", ptr.Deref(reservationDesc.Name, name), nodeset.Name, err)
+			}
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
+func isNodeListMatch(old slurmtypes.V0044ReservationInfo, new slurmtypes.V0044ReservationInfo) bool {
+	if old.NodeList != nil {
+		newNodeList, _ := hostlist.Expand(*new.NodeList)
+		oldNodeList, _ := hostlist.Expand(*old.NodeList)
+		if apiequality.Semantic.DeepEqual(newNodeList, oldNodeList) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func updateReservationNodes(ctx context.Context, slurmClient slurmclient.Client, reservation *slurmtypes.V0044ReservationInfo, nodelist *slurmapi.V0044HostlistString) error {
+
+	var flags []slurmapi.V0044ReservationDescMsgFlags
+	if reservation.Flags != nil {
+		for _, f := range *reservation.Flags {
+			flags = append(flags, slurmapi.V0044ReservationDescMsgFlags(f))
+		}
+	}
+
+	oldReservation := slurmapi.V0044ReservationDescMsg{
+		Name:      reservation.Name,
+		StartTime: reservation.StartTime,
+		EndTime:   reservation.EndTime,
+		Flags:     &flags,
+		Users:     ptr.To(slurmapi.V0044CsvString{common.SlurmUser}),
+		NodeList:  nodelist,
+	}
+
+	err := slurmClient.Update(ctx, reservation, oldReservation)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// isReservationActive() returns a boolean value based on whether the reservation
+// that it is passed is currently running. Once the Slurm RestAPI provides a
+// slurmapi.V0044ReservationInfoStatus field, this helper function should be
+// deleted in favor of using that field directly.
+func isReservationActive(reservation slurmtypes.V0044ReservationInfo) bool {
+	start := time.Unix(*reservation.StartTime.Number, 0)
+	end := time.Unix(*reservation.EndTime.Number, 0)
+
+	now := time.Now().In(time.UTC)
+	if start.Before(now) && end.After(now) {
+		return true
+	}
+
+	return false
+}
+
+// getReservationStatus() returns the boolean and time value from the NodeSet's
+// ReservationCreated Condition, if set
+func getReservationStatus(nodeset *slinkyv1beta1.NodeSet) (bool, time.Time) {
+	for i := range nodeset.Status.Conditions {
+		if nodeset.Status.Conditions[i].Type == slurmconditions.NodeSetConditionReservationCreated {
+			switch nodeset.Status.Conditions[i].Status {
+			case metav1.ConditionTrue:
+				return true, nodeset.Status.Conditions[i].LastTransitionTime.Time
+			case metav1.ConditionFalse:
+				return false, nodeset.Status.Conditions[i].LastTransitionTime.Time
+			}
+		}
+	}
+
+	return false, time.Time{}
+}
+
+var reoccuringInfoFlags = []slurmapi.V0044ReservationInfoFlags{
+	slurmapi.V0044ReservationInfoFlagsHOURLY,
+	slurmapi.V0044ReservationInfoFlagsDAILY,
+	slurmapi.V0044ReservationInfoFlagsWEEKLY,
+	slurmapi.V0044ReservationInfoFlagsWEEKEND,
+	slurmapi.V0044ReservationInfoFlagsWEEKDAY,
+}
+
+func reservationHasFlags(reservation slurmtypes.V0044ReservationInfo, flags []slurmapi.V0044ReservationInfoFlags, anyFlags bool) bool {
+	if reservation.Flags == nil && len(flags) > 0 {
+		return false
+	}
+
+	flagSet := set.New(flags...)
+	resFlags := set.New(*reservation.Flags...)
+	intersection := flagSet.Intersection(resFlags)
+
+	if anyFlags {
+		return intersection.Len() > 0
+	} else {
+		return intersection.Len() == len(flags)
+	}
+}
+
+var (
+	resInfoFlags = []slurmapi.V0044ReservationInfoFlags{
+		slurmapi.V0044ReservationInfoFlagsMAINT,
+		slurmapi.V0044ReservationInfoFlagsIGNOREJOBS,
+	}
+	resDescFlags = []slurmapi.V0044ReservationDescMsgFlags{
+		slurmapi.V0044ReservationDescMsgFlagsMAINT,
+		slurmapi.V0044ReservationDescMsgFlagsIGNOREJOBS,
+	}
+)
+
+func formatReservationForSchedule(name string, schedule slinkyv1beta1.ScheduledUpdateNodeSetStrategy) (slurmapi.V0044ReservationDescMsg, slurmtypes.V0044ReservationInfo, error) {
+	var reservationInfo slurmtypes.V0044ReservationInfo
+	var reservation slurmapi.V0044ReservationDescMsg
+
+	startTime := timeToUint64NoVal(schedule.StartTime.In(time.UTC))
+	endTime := timeToUint64NoVal(schedule.StartTime.In(time.UTC).Add(schedule.Duration.Duration))
+	duration := durationToUint32NoVal(schedule.Duration.Duration)
+
+	descFlags := parseReservationFlags(schedule.Flags, resDescFlags)
+	infoFlags := parseReservationFlags(schedule.Flags, resInfoFlags)
+
+	reservationInfo = slurmtypes.V0044ReservationInfo{
+		V0044ReservationInfo: slurmapi.V0044ReservationInfo{
+			Name:      &name,
+			StartTime: &startTime,
+			EndTime:   &endTime,
+			Flags:     &infoFlags,
+			Users:     ptr.To(common.SlurmUser),
+		},
+	}
+	reservation = slurmapi.V0044ReservationDescMsg{
+		Name:      &name,
+		StartTime: &startTime,
+		Duration:  &duration,
+		Flags:     &descFlags,
+		Users:     ptr.To(slurmapi.V0044CsvString{common.SlurmUser}),
+	}
+
+	return reservation, reservationInfo, nil
+}
+
+func timeToUint64NoVal(t time.Time) slurmapi.V0044Uint64NoValStruct {
+	return slurmapi.V0044Uint64NoValStruct{
+		Infinite: new(false),
+		Number:   ptr.To(t.Unix()),
+		Set:      new(true),
+	}
+}
+
+func durationToUint32NoVal(d time.Duration) slurmapi.V0044Uint32NoValStruct {
+	return slurmapi.V0044Uint32NoValStruct{
+		Infinite: new(false),
+		Number:   ptr.To(int32(d.Minutes())),
+		Set:      new(true),
+	}
+}
+
+func parseReservationFlags[T slurmapi.V0044ReservationInfoFlags | slurmapi.V0044ReservationDescMsgFlags](flags []string, reqFlags []T) []T {
+	// Required flags
+	flagSet := set.New(reqFlags...)
+
+	// User flags
+	for _, flag := range flags {
+		f := T(strings.ToUpper(flag))
+		flagSet.Insert(f)
+	}
+
+	return flagSet.SortedList()
 }
 
 func (r *realSlurmControl) lookupClient(nodeset *slinkyv1beta1.NodeSet) slurmclient.Client {

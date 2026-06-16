@@ -15,6 +15,7 @@ import (
 	api "github.com/SlinkyProject/slurm-client/api/v0044"
 	"github.com/SlinkyProject/slurm-client/pkg/client"
 	"github.com/SlinkyProject/slurm-client/pkg/client/fake"
+	"github.com/SlinkyProject/slurm-client/pkg/client/interceptor"
 	"github.com/SlinkyProject/slurm-client/pkg/object"
 	"github.com/SlinkyProject/slurm-client/pkg/types"
 	slinkyv1beta1 "github.com/SlinkyProject/slurm-operator/api/v1beta1"
@@ -53,6 +54,11 @@ func slurmUpdateFn(_ context.Context, obj object.Object, req any, opts ...client
 		o.Comment = r.Comment
 		o.Reason = r.Reason
 		o.Topology = r.TopologyStr
+	case *types.V0044ReservationInfo:
+		_, ok := req.(api.V0044ReservationDescMsg)
+		if !ok {
+			return errors.New("failed to cast request object")
+		}
 	default:
 		return errors.New("failed to cast slurm object")
 	}
@@ -2254,6 +2260,948 @@ func Test_realSlurmControl_GetNodesForPods(t *testing.T) {
 			slices.Sort(tt.want)
 			if !apiequality.Semantic.DeepEqual(got, tt.want) {
 				t.Errorf("GetNodesForPods() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_realSlurmControl_CheckReservationForNodeSet(t *testing.T) {
+	// Configure times for testing
+	now, err := time.Parse(time.RFC3339, "2026-03-04T00:00:00Z")
+	if err != nil {
+		t.Errorf("Failed to initialize test. Failed to parse time: %v", err)
+	}
+	startTime := now.Unix()
+	endTime := now.Add(time.Hour).Unix()
+
+	type testCase struct {
+		name    string
+		client  client.Client
+		nodeset *slinkyv1beta1.NodeSet
+		want    bool
+		wantErr bool
+	}
+	tests := []testCase{
+		{
+			name: "invalid NodeSet (no controller ref)",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "reservation does not exist",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			wantErr: false,
+			want:    false,
+		},
+		{
+			name: "reservation exists",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.RollingUpdateNodeSetStrategyType,
+					},
+				},
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTime), Set: ptr.To(true)}),
+				},
+			},
+			).Build(),
+			want:    true,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controllerName := tt.nodeset.Spec.ControllerRef.Name
+
+			r := NewSlurmControl(newSlurmClientMap(controllerName, tt.client))
+
+			got, gotErr := r.CheckReservationForNodeSet(context.Background(), tt.nodeset)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("CheckReservationForNodeSet() error = %v, wantErr %v", gotErr, tt.wantErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatalf("CheckReservationForNodeSet() error = %v, wantErr %v", gotErr, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Fatalf("CheckReservationForNodeSet() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_realSlurmControl_GetPodsUnderReservation(t *testing.T) {
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "slurm",
+		},
+	}
+	kclient := kubefake.NewFakeClient()
+
+	// Configure times for testing
+	future, err := time.Parse(time.RFC3339, "2099-03-04T00:00:00Z")
+	if err != nil {
+		t.Errorf("Failed to initialize test. Failed to parse time: %v", err)
+	}
+	startTimeFuture := future.Unix()
+	endTimeFuture := future.Add(time.Hour).Unix()
+
+	now := time.Now()
+	startTimeNow := now.Unix()
+	endTimeNow := now.Add(time.Hour).Unix()
+
+	// Configure NodeSets and pods for testing
+	ns0 := newNodeSet("ns0", controller.Name, 2)
+	ns0.Spec.UpdateStrategy.Type = slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+	ns0.Spec.UpdateStrategy.ScheduledUpdate.StartTime = metav1.Time{
+		Time: future,
+	}
+	ns0reservationname := "SlurmOperatorMaint-" + ns0.Name
+	ns0pod0 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 0, "")
+	ns0pod1 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 1, "")
+	ns0pod0name := nodesetutils.GetSlurmNodeName(ns0pod0)
+	ns0pod1name := nodesetutils.GetSlurmNodeName(ns0pod1)
+
+	ns1 := newNodeSet("ns1", controller.Name, 2)
+	ns1.Spec.UpdateStrategy.Type = slinkyv1beta1.ScheduledUpdateNodeSetStrategyType
+	ns1.Spec.UpdateStrategy.ScheduledUpdate.StartTime = metav1.Time{
+		Time: now,
+	}
+	ns1reservationname := "SlurmOperatorMaint-" + ns1.Name
+	ns1pod0 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns1, controller, 0, "")
+	ns1pod1 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns1, controller, 1, "")
+	ns1pod0name := nodesetutils.GetSlurmNodeName(ns1pod0)
+	ns1pod1name := nodesetutils.GetSlurmNodeName(ns1pod1)
+
+	nodeList := &types.V0044NodeList{
+		Items: []types.V0044Node{
+			{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+			{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+			{V0044Node: api.V0044Node{
+				Name: ptr.To(ns1pod0name),
+				State: ptr.To([]api.V0044NodeState{
+					api.V0044NodeStateMAINTENANCE,
+				}),
+				Reservation: &ns1reservationname,
+			}},
+			{V0044Node: api.V0044Node{
+				Name: ptr.To(ns1pod1name),
+				State: ptr.To([]api.V0044NodeState{
+					api.V0044NodeStateMAINTENANCE,
+				}),
+				Reservation: &ns1reservationname,
+			}},
+		},
+	}
+
+	type testCase struct {
+		name    string
+		client  client.Client
+		nodeset *slinkyv1beta1.NodeSet
+		pods    []*corev1.Pod
+		want    []*corev1.Pod
+		wantErr bool
+	}
+	tests := []testCase{
+		{
+			name:    "no pods under reservation",
+			nodeset: ns0,
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To(ns0reservationname),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTimeFuture)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTimeFuture)}),
+				},
+			},
+			).WithLists(nodeList).Build(),
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			want:    []*corev1.Pod{},
+			wantErr: false,
+		},
+		{
+			name:    "one pod under reservation",
+			nodeset: ns1,
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(
+				&types.V0044ReservationInfo{
+					V0044ReservationInfo: api.V0044ReservationInfo{
+						Name:      ptr.To(ns0reservationname),
+						StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTimeFuture)}),
+						EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTimeFuture)}),
+					},
+				},
+				&types.V0044ReservationInfo{
+					V0044ReservationInfo: api.V0044ReservationInfo{
+						Name:      ptr.To(ns1reservationname),
+						StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTimeNow)}),
+						EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTimeNow)}),
+					},
+				},
+			).WithLists(nodeList).Build(),
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns1pod0,
+			},
+			want: []*corev1.Pod{
+				ns1pod0,
+			},
+			wantErr: false,
+		},
+		{
+			name:    "two pods under reservation",
+			nodeset: ns1,
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(
+				&types.V0044ReservationInfo{
+					V0044ReservationInfo: api.V0044ReservationInfo{
+						Name:      ptr.To(ns0reservationname),
+						StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTimeFuture)}),
+						EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTimeFuture)}),
+					},
+				},
+				&types.V0044ReservationInfo{
+					V0044ReservationInfo: api.V0044ReservationInfo{
+						Name:      ptr.To(ns1reservationname),
+						StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTimeNow)}),
+						EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTimeNow)}),
+					},
+				},
+			).WithLists(nodeList).Build(),
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+				ns1pod0,
+				ns1pod1,
+			},
+			want: []*corev1.Pod{
+				ns1pod0,
+				ns1pod1,
+			},
+			wantErr: false,
+		},
+		{
+			// ns0's reservation is intentionally not registered. ns1pod0's
+			// node carries a non-nil Reservation pointing elsewhere; this
+			// would previously panic when dereferenced against the unset
+			// ns0 reservation name.
+			name:    "reservation does not exist",
+			nodeset: ns0,
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(
+				&types.V0044ReservationInfo{
+					V0044ReservationInfo: api.V0044ReservationInfo{
+						Name:      ptr.To(ns1reservationname),
+						StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTimeNow)}),
+						EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTimeNow)}),
+					},
+				},
+			).WithLists(nodeList).Build(),
+			pods: []*corev1.Pod{
+				ns1pod0,
+			},
+			want:    nil,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controllerName := tt.nodeset.Spec.ControllerRef.Name
+
+			r := NewSlurmControl(newSlurmClientMap(controllerName, tt.client))
+
+			got, gotErr := r.GetPodsUnderReservation(context.Background(), tt.nodeset, tt.pods)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("GetReservation() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("GetReservation() succeeded unexpectedly")
+			}
+			if !apiequality.Semantic.DeepEqual(got, tt.want) {
+				t.Errorf("UpdateNodeWithPodInfo() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_realSlurmControl_DeleteReservationForNodeSet(t *testing.T) {
+	// Configure times for testing
+	now, err := time.Parse(time.RFC3339, "2026-03-04T00:00:00Z")
+	if err != nil {
+		t.Errorf("Failed to initialize test. Failed to parse time: %v", err)
+	}
+	startTime := now.Unix()
+	endTime := now.Add(time.Hour).Unix()
+
+	type testCase struct {
+		name    string
+		client  client.Client
+		nodeset *slinkyv1beta1.NodeSet
+		wantErr bool
+	}
+	tests := []testCase{
+		{
+			name: "invalid NodeSet (no controller ref)",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			wantErr: false,
+		},
+		{
+			name: "reservation does not exist",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			wantErr: false,
+		},
+		{
+			name: "reservation exists with default name, status not provided (lookup by full name)",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+				},
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTime)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTime)}),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "reservation exists with custom name, status not provided (lookup by prefix)",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "slinky",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+				},
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky-customName"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(startTime)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(endTime)}),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controllerName := tt.nodeset.Spec.ControllerRef.Name
+
+			r := NewSlurmControl(newSlurmClientMap(controllerName, tt.client))
+
+			gotErr := r.DeleteReservationForNodeSet(context.Background(), tt.nodeset)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("GetReservation() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("GetReservation() succeeded unexpectedly")
+			}
+		})
+	}
+}
+
+func Test_realSlurmControl_SyncReservationForNodeSet(t *testing.T) {
+	// Configure times for testing
+	now := time.Now()
+
+	currentStartTimeMeta := metav1.Time{Time: now}
+	currentStartTime := now.Unix()
+	currentEndTime := now.Add(time.Hour).Unix()
+
+	duration := metav1.Duration{Duration: 45 * time.Minute}
+
+	futureStartTimeMeta := metav1.Time{Time: now.Add(24 * time.Hour)}
+	futureStartTime := now.Add(24 * time.Hour).Unix()
+	futureEndTime := now.Add(24 * time.Hour).Unix()
+
+	pastStartTimeMeta := metav1.Time{Time: now.Add(-24 * time.Hour)}
+	pastStartTime := now.Add(-24 * time.Hour).Unix()
+	pastEndTime := now.Add(-24 * time.Hour).Unix()
+
+	controller := &slinkyv1beta1.Controller{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "slurm",
+		},
+	}
+	kclient := kubefake.NewFakeClient()
+	ns0 := newNodeSet("ns0", controller.Name, 2)
+	ns0pod0 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 0, "")
+	ns0pod1 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 1, "")
+	ns0pod2 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns0, controller, 2, "")
+	ns0pod0name := nodesetutils.GetSlurmNodeName(ns0pod0)
+	ns0pod1name := nodesetutils.GetSlurmNodeName(ns0pod1)
+	ns0pod2name := nodesetutils.GetSlurmNodeName(ns0pod2)
+	ns1 := newNodeSet("ns1", controller.Name, 2)
+	ns1pod0 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns1, controller, 0, "")
+	ns1pod1 := nodesetutils.NewNodeSetStatefulSetPod(kclient, ns1, controller, 1, "")
+	ns1pod0name := nodesetutils.GetSlurmNodeName(ns1pod0)
+	ns1pod1name := nodesetutils.GetSlurmNodeName(ns1pod1)
+
+	type testCase struct {
+		name    string
+		client  client.Client
+		nodeset *slinkyv1beta1.NodeSet
+		pods    []*corev1.Pod
+		wantErr bool
+	}
+	tests := []testCase{
+		{
+			name: "invalid NodeSet (no controller ref)",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			wantErr: false,
+		},
+		{
+			name: "reservation spec not provided",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+					},
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			wantErr: false,
+		},
+		{
+			name: "create reservation with basic spec",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: futureStartTimeMeta,
+							Duration:  duration,
+							Flags:     []string{"weekly", "FORCE_START"},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "create reservation fails when Slurm Create returns error",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: futureStartTimeMeta,
+							Duration:  duration,
+							Flags:     []string{"weekly", "FORCE_START"},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithInterceptorFuncs(interceptor.Funcs{
+				Create: func(context.Context, object.Object, any, ...client.CreateOption) error {
+					return errors.New("Internal Server Error")
+				},
+			}).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).Build(),
+			wantErr: true,
+		},
+		{
+			name: "create reservation with complex spec",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: futureStartTimeMeta,
+							Duration:  duration,
+							Flags:     []string{"weekly", "FORCE_START", "invalid_flag", "USER_DELETE"},
+						},
+					},
+				},
+			},
+			client:  fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).Build(),
+			wantErr: false,
+		},
+		{
+			name: "update reservation with simple spec",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: futureStartTimeMeta,
+							Duration:  duration,
+							Flags:     []string{"weekly", "FORCE_START"},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(futureStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(futureEndTime), Set: ptr.To(true)}),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "update reservation fails when Slurm Update returns error",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: futureStartTimeMeta,
+							Duration:  duration,
+							Flags:     []string{"weekly", "FORCE_START"},
+						},
+					},
+				},
+				Status: slinkyv1beta1.NodeSetStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               slurmconditions.NodeSetConditionReservationCreated,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: futureStartTimeMeta,
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithInterceptorFuncs(interceptor.Funcs{
+				Update: func(context.Context, object.Object, any, ...client.UpdateOption) error {
+					return errors.New("Internal Server Error")
+				},
+			}).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(futureStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(futureEndTime), Set: ptr.To(true)}),
+				},
+			},
+			).Build(),
+			wantErr: true,
+		},
+		{
+			name: "update reservation with complex spec",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: futureStartTimeMeta,
+							Duration:  duration,
+							Flags: []string{
+								"USER_DELETE",
+								"WEEKLY",
+								"FORCE_START",
+							},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(futureStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(futureEndTime), Set: ptr.To(true)}),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "update reservation with past start time in Slurm",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: pastStartTimeMeta,
+							Duration:  duration,
+							Flags: []string{
+								"USER_DELETE",
+								"WEEKLY",
+								"FORCE_START",
+							},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(pastStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(pastEndTime), Set: ptr.To(true)}),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "update reservation with past start time in Slurm fails without reoccuring flag",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: pastStartTimeMeta,
+							Duration:  duration,
+							Flags: []string{
+								"USER_DELETE",
+							},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(currentStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(currentEndTime), Set: ptr.To(true)}),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "update active reservation does not occur",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: currentStartTimeMeta,
+							Duration:  duration,
+							Flags:     []string{"weekly", "FORCE_START"},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithInterceptorFuncs(interceptor.Funcs{
+				Update: func(context.Context, object.Object, any, ...client.UpdateOption) error {
+					// We can tell that Update didn't get called because an error was not returned here
+					return errors.New("Internal Server Error")
+				},
+			}).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(currentStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(currentEndTime), Set: ptr.To(true)}),
+					NodeList:  ptr.To(ns0pod0name + "," + ns0pod1name),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+		{
+			name: "active reservation nodes are updated",
+			nodeset: &slinkyv1beta1.NodeSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "slinky",
+					Namespace: "default",
+				},
+				Spec: slinkyv1beta1.NodeSetSpec{
+					ControllerRef: corev1.LocalObjectReference{
+						Name: "slurm",
+					},
+					UpdateStrategy: slinkyv1beta1.NodeSetUpdateStrategy{
+						Type: slinkyv1beta1.ScheduledUpdateNodeSetStrategyType,
+						ScheduledUpdate: slinkyv1beta1.ScheduledUpdateNodeSetStrategy{
+							StartTime: currentStartTimeMeta,
+							Duration:  duration,
+							Flags: []string{
+								"USER_DELETE",
+								"WEEKLY",
+								"FORCE_START",
+							},
+						},
+					},
+				},
+			},
+			pods: []*corev1.Pod{
+				ns0pod0,
+				ns0pod1,
+				ns0pod2,
+			},
+			client: fake.NewClientBuilder().WithUpdateFn(slurmUpdateFn).WithLists(
+				&types.V0044NodeList{
+					Items: []types.V0044Node{
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod1name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns0pod2name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod0name)}},
+						{V0044Node: api.V0044Node{Name: ptr.To(ns1pod1name)}},
+					},
+				},
+			).WithObjects(&types.V0044ReservationInfo{
+				V0044ReservationInfo: api.V0044ReservationInfo{
+					Name:      ptr.To("SlurmOperatorMaint-slinky"),
+					StartTime: ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(currentStartTime), Set: ptr.To(true)}),
+					EndTime:   ptr.To(api.V0044Uint64NoValStruct{Number: ptr.To(currentEndTime), Set: ptr.To(true)}),
+					NodeList:  ptr.To(ns0pod0name + "," + ns0pod1name),
+				},
+			},
+			).Build(),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controllerName := tt.nodeset.Spec.ControllerRef.Name
+
+			r := NewSlurmControl(newSlurmClientMap(controllerName, tt.client))
+
+			gotErr := r.SyncReservationForNodeSet(context.Background(), tt.nodeset, tt.pods)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("SyncReservationForNodeSet() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("SyncReservationForNodeSet() succeeded unexpectedly")
 			}
 		})
 	}

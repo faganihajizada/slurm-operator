@@ -68,3 +68,11 @@ const (
 	// NOTE: Set by the NodeSet controller.
 	LabelNodeSetScalingMode = NodeSetPrefix + "scaling-mode"
 )
+
+// Well Known Finalizers
+
+const (
+	// FinalizerNodeSetReservation
+	// NOTE: Set by the NodeSet controller.
+	FinalizerNodeSetReservation = NodeSetPrefix + "reservation"
+)
