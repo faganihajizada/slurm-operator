@@ -15,9 +15,9 @@ SPDX-License-Identifier: Apache-2.0
 {{- $priorityClassName := $podSpec.priorityClassName | default (include "slurm.priorityClassName" $) -}}
 {{- $_ := set $podSpec "priorityClassName" $priorityClassName -}}
 {{- $_ := set $podSpec "hostname" (printf "%s-" $key) -}}
-{{- $slurmd := $nodeset.slurmd | default dict -}}
-{{- $logfile := $nodeset.logfile | default dict -}}
 {{- $podTemplate := dict "metadata" $metadata "spec" $podSpec -}}
+{{- $slurmd := $nodeset.slurmd | default dict -}}
+{{- $logfile := $nodeset.logfile | default dict }}
 ---
 apiVersion: slinky.slurm.net/v1beta1
 kind: NodeSet
