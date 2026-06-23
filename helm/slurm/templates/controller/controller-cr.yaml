@@ -52,45 +52,49 @@ spec:
   extraConf: |-
     {{- include "slurm.controller.extraConf" . | nindent 4 }}
   {{- end }}{{- /* if (include "slurm.controller.extraConf" .) */}}
-  {{- with .Values.configFiles }}
   configFileRefs:
-    - name: {{ include "slurm.controller.configName" $ }}
-  {{- end }}{{- /* with .Values.configFiles */}}
+    {{- if .Values.configFiles }}
+    - name: {{ include "slurm.controller.configName" . }}
+    {{- end }}{{- /* if .Values.configFiles */}}
+    {{- $hasGresConf := hasKey (.Values.configFiles | default dict) "gres.conf" -}}
+    {{- if and (include "slurm.vendor.google.a3mega.enabled" .) (not $hasGresConf) }}
+    - name: {{ include "slurm.vendor.google.a3mega.configName" . }}
+    {{- end }}{{- /* and (include "slurm.vendor.google.a3mega.enabled" .) (not $hasGresConf) */}}
   prologScriptRefs:
-    {{- with .Values.prologScripts }}
-    - name: {{ include "slurm.controller.prologName" $ }}
-    {{- end }}{{- /* with .Values.prologScripts */}}
-    {{- if (include "vendor.dcgm.enabled" .) }}
-    - name: {{ include "vendor.dcgm.prologName" . }}
-    {{- end }}{{- /* if (include "vendor.dcgm.enabled" .) */}}
+    {{- if .Values.prologScripts }}
+    - name: {{ include "slurm.controller.prologName" . }}
+    {{- end }}{{- /* if .Values.prologScripts */}}
+    {{- if (include "slurm.vendor.nvidia.dcgm.enabled" .) }}
+    - name: {{ include "slurm.vendor.nvidia.dcgm.prologName" . }}
+    {{- end }}{{- /* if (include "slurm.vendor.nvidia.dcgm.enabled" .) */}}
   epilogScriptRefs:
-    {{- with .Values.epilogScripts }}
-    - name: {{ include "slurm.controller.epilogName" $ }}
-    {{- end }}{{- /* with .Values.epilogScripts */}}
-    {{- if (include "vendor.dcgm.enabled" .) }}
-    - name: {{ include "vendor.dcgm.epilogName" . }}
-    {{- end }}{{- /* if (include "vendor.dcgm.enabled" .) */}}
+    {{- if .Values.epilogScripts }}
+    - name: {{ include "slurm.controller.epilogName" . }}
+    {{- end }}{{- /* if .Values.epilogScripts */}}
+    {{- if (include "slurm.vendor.nvidia.dcgm.enabled" .) }}
+    - name: {{ include "slurm.vendor.nvidia.dcgm.epilogName" . }}
+    {{- end }}{{- /* if (include "slurm.vendor.nvidia.dcgm.enabled" .) */}}
   prologSlurmctldScriptRefs:
-    {{- with .Values.prologSlurmctldScripts }}
-    - name: {{ include "slurm.controller.prologSlurmctldName" $ }}
-    {{- end }}{{- /* with .Values.prologSlurmctldScripts */}}
+    {{- if .Values.prologSlurmctldScripts }}
+    - name: {{ include "slurm.controller.prologSlurmctldName" . }}
+    {{- end }}{{- /* if .Values.prologSlurmctldScripts */}}
   epilogSlurmctldScriptRefs:
-    {{- with .Values.epilogSlurmctldScripts }}
-    - name: {{ include "slurm.controller.epilogSlurmctldName" $ }}
-    {{- end }}{{- /* with .Values.epilogSlurmctldScripts */}}
+    {{- if .Values.epilogSlurmctldScripts }}
+    - name: {{ include "slurm.controller.epilogSlurmctldName" . }}
+    {{- end }}{{- /* if .Values.epilogSlurmctldScripts */}}
   slurmctld:
     {{- $_ := set $slurmctld "imagePullPolicy" (get $slurmctld "imagePullPolicy" | default $.Values.imagePullPolicy) -}}
-    {{- include "format-container" $slurmctld | nindent 4 }}
+    {{- include "slurm.format-container" $slurmctld | nindent 4 }}
   inplaceReconfigure: {{ .Values.controller.inplaceReconfigure }}
   reconfigure:
     {{- $_ := set $reconfigure "imagePullPolicy" (get $reconfigure "imagePullPolicy" | default $.Values.imagePullPolicy) -}}
-    {{- include "format-container" $reconfigure | nindent 4 }}
+    {{- include "slurm.format-container" $reconfigure | nindent 4 }}
   logfile:
     {{- $_ := set $logfile "imagePullPolicy" (get $logfile "imagePullPolicy" | default $.Values.imagePullPolicy) -}}
-    {{- include "format-container" $logfile | nindent 4 }}
-  {{- include "format-podTemplate" $podTemplate | nindent 2 }}
+    {{- include "slurm.format-container" $logfile | nindent 4 }}
+  {{- include "slurm.format-podTemplate" $podTemplate | nindent 2 }}
   {{- with .Values.controller.persistence }}
-  {{- $persistence := fromYaml (include "toYaml-set-storageClassName" .) }}
+  {{- $persistence := fromYaml (include "slurm.toYaml-set-storageClassName" .) }}
   persistence:
     {{- toYaml $persistence | nindent 4 }}
   {{- end }}{{- /* with .Values.controller.persistence */}}

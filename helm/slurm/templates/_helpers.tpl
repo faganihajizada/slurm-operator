@@ -57,7 +57,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Format image reference from image object.
 */}}
-{{- define "format-image" -}}
+{{- define "slurm.format-image" -}}
 {{- if kindIs "string" . -}}
   {{- $image := required "image is required" . -}}
   {{- printf $image | toString -}}
@@ -76,27 +76,27 @@ Format image reference from image object.
 {{/*
 Format container object.
 */}}
-{{- define "format-container" -}}
+{{- define "slurm.format-container" -}}
 {{- $container := omit . "image" -}}
-{{- $_ := set $container "image" (include "format-image" .image) -}}
+{{- $_ := set $container "image" (include "slurm.format-image" .image) -}}
 {{ toYaml $container }}
 {{- end -}}
 
 {{/*
 Format pod template object.
 */}}
-{{- define "format-podTemplate" -}}
+{{- define "slurm.format-podTemplate" -}}
 {{- with . -}}
 template:
-  {{- include "format-metadata" . | nindent 2 -}}
-  {{- include "format-podSpec" . | nindent 2 -}}
+  {{- include "slurm.format-metadata" . | nindent 2 -}}
+  {{- include "slurm.format-podSpec" . | nindent 2 -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
 Format pod metadata object.
 */}}
-{{- define "format-metadata" -}}
+{{- define "slurm.format-metadata" -}}
 {{- with .metadata -}}
 metadata:
   {{- toYaml . | nindent 2 }}
@@ -106,7 +106,7 @@ metadata:
 {{/*
 Format pod spec object.
 */}}
-{{- define "format-podSpec" -}}
+{{- define "slurm.format-podSpec" -}}
 {{- with .spec -}}
 spec:
   {{- toYaml . | nindent 2 }}
@@ -117,7 +117,7 @@ spec:
 Converts a list to a key value CSV.
 Ref: https://github.com/helm/helm/issues/9379
 */}}
-{{- define "_toList" -}}
+{{- define "slurm._toList" -}}
 {{- $items := list -}}
 {{- range $key, $val := . -}}
   {{- if $val -}}
@@ -131,7 +131,7 @@ Ref: https://github.com/helm/helm/issues/9379
 Parse resources object and convert units.
 Ref: https://github.com/helm/helm/issues/11376#issuecomment-1256831105
 */}}
-{{- define "resource-quantity" -}}
+{{- define "slurm.resource-quantity" -}}
 {{- $value := . -}}
 {{- $unit := 1.0 -}}
 {{- if typeIs "string" . -}}
@@ -151,7 +151,7 @@ Ref: https://github.com/helm/helm/issues/11376#issuecomment-1256831105
 ToYaml dict after handling storageClassName.
 Ref: https://github.com/helm/helm/issues/2600
 */}}
-{{- define "toYaml-set-storageClassName" -}}
+{{- define "slurm.toYaml-set-storageClassName" -}}
 {{- $out := . | default dict -}}
 {{ $storageClassName := dig "storageClassName" nil $out }}
 {{- if or (eq $storageClassName "") (eq $storageClassName "-") -}}

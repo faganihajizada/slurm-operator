@@ -25,7 +25,7 @@ Determine worker extraConf (e.g. `--conf <extraConf>`)
 {{- if .extraConf -}}
   {{- $extraConf = splitList " " .extraConf -}}
 {{- else if .extraConfMap -}}
-  {{- $extraConf = (include "_toList" .extraConfMap) | splitList ";" -}}
+  {{- $extraConf = (include "slurm._toList" .extraConfMap) | splitList ";" -}}
 {{- end }}
 {{- join " " $extraConf -}}
 {{- end }}
@@ -38,7 +38,7 @@ Determine worker partition config
 {{- if .config -}}
   {{- $config = list .config -}}
 {{- else if .configMap -}}
-  {{- $config = (include "_toList" .configMap) | splitList ";" -}}
+  {{- $config = (include "slurm._toList" .configMap) | splitList ";" -}}
 {{- end }}
 {{- join " " $config -}}
 {{- end }}

@@ -26,8 +26,8 @@ spec:
   replicas: {{ .Values.restapi.replicas }}
   slurmrestd:
     {{- $_ := set $slurmrestd "imagePullPolicy" (get $slurmrestd "imagePullPolicy" | default $.Values.imagePullPolicy) -}}
-    {{- include "format-container" $slurmrestd | nindent 4 }}
-  {{- include "format-podTemplate" $podTemplate | nindent 2 }}
+    {{- include "slurm.format-container" $slurmrestd | nindent 4 }}
+  {{- include "slurm.format-podTemplate" $podTemplate | nindent 2 }}
   {{- with .Values.restapi.service }}
   service:
     {{- toYaml . | nindent 4 }}

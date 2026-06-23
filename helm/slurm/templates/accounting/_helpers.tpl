@@ -11,7 +11,7 @@ Determine accounting extraConf
 {{- if .Values.accounting.extraConf -}}
   {{- $extraConf = splitList "\n" .Values.accounting.extraConf -}}
 {{- else if .Values.accounting.extraConfMap -}}
-  {{- $extraConf = (include "_toList" .Values.accounting.extraConfMap) | splitList ";" -}}
+  {{- $extraConf = (include "slurm._toList" .Values.accounting.extraConfMap) | splitList ";" -}}
 {{- end }}
 {{- join "\n" $extraConf -}}
 {{- end }}

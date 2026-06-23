@@ -4,15 +4,15 @@ SPDX-FileCopyrightText: Copyright (C) NVIDIA CORPORATION & AFFILIATES. All right
 SPDX-License-Identifier: Apache-2.0
 */}}
 
-{{- if (include "vendor.dcgm.enabled" .) }}
-{{- $jobMappingDir := include "vendor.dcgm.jobMappingDir" . -}}
+{{- if (include "slurm.vendor.nvidia.dcgm.enabled" .) }}
+{{- $jobMappingDir := include "slurm.vendor.nvidia.dcgm.jobMappingDir" . -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ (include "vendor.dcgm.epilogName" .) }}
+  name: {{ (include "slurm.vendor.nvidia.dcgm.epilogName" .) }}
   namespace: {{ include "slurm.namespace" . }}
   labels:
     {{- include "slurm.labels" . | nindent 4 }}
 data:
-  {{- include "vendor.dcgm.epilogScripts" . | nindent 2 }}
-{{- end }}{{- /* if (include "vendor.dcgm.enabled" .) */}}
+  {{- include "slurm.vendor.nvidia.dcgm.epilogScripts" . | nindent 2 }}
+{{- end }}{{- /* if (include "slurm.vendor.nvidia.dcgm.enabled" .) */}}

@@ -11,6 +11,7 @@ manifest should match snapshot:
       name: test-release-slurm
       namespace: test-namespace
     spec:
+      configFileRefs: null
       epilogScriptRefs: null
       epilogSlurmctldScriptRefs: null
       inplaceReconfigure: false
