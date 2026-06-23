@@ -173,7 +173,7 @@ Slurm is a full featured HPC workload manager. To highlight a few features:
 
 | Release | Minimum <br> Kubernetes |          Minimum <br> Slurm (Data Parser)           |
 | :-----: | :---------------------: | :-------------------------------------------------: |
-| [v1.2]  |   [v1.29][k8s-v1.29]    | [25.11][slurm-25.11] ([v0.0.44][slurm-data_parser]) |
+| [v1.2]  |   [v1.29][k8s-v1.29]    | [26.05][slurm-26.05] ([v0.0.44][slurm-data_parser]) |
 | [v1.1]  |   [v1.29][k8s-v1.29]    | [25.11][slurm-25.11] ([v0.0.44][slurm-data_parser]) |
 | [v1.0]  |   [v1.29][k8s-v1.29]    | [25.11][slurm-25.11] ([v0.0.44][slurm-data_parser]) |
 
@@ -325,6 +325,7 @@ specific language governing permissions and limitations under the License.
 [slinky-docs]: https://slinky.schedmd.com/
 [slurm]: https://slurm.schedmd.com/overview.html
 [slurm-25.11]: https://github.com/SchedMD/slurm/releases/tag/slurm-25-11-0-1
+[slurm-26.05]: https://github.com/SchedMD/slurm/releases/tag/slurm-26-05-0-1
 [slurm-accounting]: https://slurm.schedmd.com/accounting.html
 [slurm-arch]: https://slurm.schedmd.com/quickstart.html#arch
 [slurm-containers]: https://slurm.schedmd.com/containers.html
