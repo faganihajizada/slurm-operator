@@ -8,7 +8,7 @@ For complete license texts, please refer to the source repositories or the LICEN
 
 ### github.com/SlinkyProject/slurm-client
 - Name: github.com/SlinkyProject/slurm-client
-- Version: v1.1.0-rc1.0.20260331145905-029f87c680d4
+- Version: v1.1.0-rc1.0.20260616191021-0dac744e9931
 - License: Apache-2.0
 
 ### github.com/apapsch/go-jsonmerge/v2
@@ -228,27 +228,27 @@ For complete license texts, please refer to the source repositories or the LICEN
 
 ### github.com/klauspost/compress
 - Name: github.com/klauspost/compress
-- Version: v1.18.4
+- Version: v1.18.5
 - License: Apache-2.0
 
 ### github.com/klauspost/compress
 - Name: github.com/klauspost/compress
-- Version: v1.18.4
+- Version: v1.18.5
 - License: BSD-3-Clause
 
 ### github.com/klauspost/compress
 - Name: github.com/klauspost/compress
-- Version: v1.18.4
+- Version: v1.18.5
 - License: MIT
 
 ### github.com/klauspost/compress/internal/snapref
 - Name: github.com/klauspost/compress/internal/snapref
-- Version: v1.18.4
+- Version: v1.18.5
 - License: BSD-3-Clause
 
 ### github.com/klauspost/compress/zstd/internal/xxhash
 - Name: github.com/klauspost/compress/zstd/internal/xxhash
-- Version: v1.18.4
+- Version: v1.18.5
 - License: MIT
 
 ### github.com/mailru/easyjson/jlexer
@@ -458,32 +458,32 @@ For complete license texts, please refer to the source repositories or the LICEN
 
 ### go.opentelemetry.io/otel
 - Name: go.opentelemetry.io/otel
-- Version: v1.42.0
+- Version: v1.43.0
 - License: Apache-2.0
 
 ### go.opentelemetry.io/otel
 - Name: go.opentelemetry.io/otel
-- Version: v1.42.0
+- Version: v1.43.0
 - License: BSD-3-Clause
 
 ### go.opentelemetry.io/otel/metric
 - Name: go.opentelemetry.io/otel/metric
-- Version: v1.42.0
+- Version: v1.43.0
 - License: Apache-2.0
 
 ### go.opentelemetry.io/otel/metric
 - Name: go.opentelemetry.io/otel/metric
-- Version: v1.42.0
+- Version: v1.43.0
 - License: BSD-3-Clause
 
 ### go.opentelemetry.io/otel/trace
 - Name: go.opentelemetry.io/otel/trace
-- Version: v1.42.0
+- Version: v1.43.0
 - License: Apache-2.0
 
 ### go.opentelemetry.io/otel/trace
 - Name: go.opentelemetry.io/otel/trace
-- Version: v1.42.0
+- Version: v1.43.0
 - License: BSD-3-Clause
 
 ### go.uber.org/multierr
