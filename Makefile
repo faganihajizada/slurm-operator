@@ -401,7 +401,7 @@ govulncheck: govulncheck-bin ## Write $(GOVULNCHECK_REPORT); fail if a vulnerabi
 # https://github.com/golangci/golangci-lint/blob/main/.pre-commit-hooks.yaml
 .PHONY: golangci-lint
 golangci-lint: golangci-lint-bin ## Run golangci-lint.
-	$(GOLANGCI_LINT) run --fix
+	$(GOLANGCI_LINT) run --new-from-rev HEAD --fix
 
 # https://github.com/golangci/golangci-lint/blob/main/.pre-commit-hooks.yaml
 .PHONY: golangci-lint-fmt
