@@ -426,6 +426,11 @@ For complete license texts, please refer to the source repositories or the LICEN
 - Version: v1.0.10
 - License: BSD-3-Clause
 
+### github.com/stretchr/testify
+- Name: github.com/stretchr/testify
+- Version: v1.11.1
+- License: MIT
+
 ### github.com/vladimirvivien/gexe
 - Name: github.com/vladimirvivien/gexe
 - Version: v0.5.0
@@ -565,6 +570,11 @@ For complete license texts, please refer to the source repositories or the LICEN
 - Name: gopkg.in/inf.v0
 - Version: v0.9.1
 - License: BSD-3-Clause
+
+### gopkg.in/yaml.v3
+- Name: gopkg.in/yaml.v3
+- Version: v3.0.1
+- License: MIT
 
 ### k8s.io/api
 - Name: k8s.io/api
